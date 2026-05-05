@@ -99,20 +99,29 @@ APM.openDependencyDetail = function(host, op, rpm, p99, err) {
 APM.renderServiceDetail = function() {
   const id = (APM.pageParams && APM.pageParams.id) || 'checkout-service';
   const s = APM.services.find(x => x.id === id) || APM.services[1];
+  // Migrate legacy serviceTab values to consolidated tabs (in case state from prior session).
+  const legacy = { traces:'signals', logs:'signals', db:'deps', kafka:'deps', external:'deps', runtime:'runtime', infra:'runtime' };
+  if (APM.serviceTab && legacy[APM.serviceTab]) {
+    const sub = APM.serviceTab;
+    APM.serviceTab = legacy[APM.serviceTab];
+    APM.svcSubTab = APM.svcSubTab || {};
+    if (sub === 'traces' || sub === 'logs') APM.svcSubTab.signals = sub;
+    if (sub === 'db' || sub === 'kafka' || sub === 'external') APM.svcSubTab.deps = sub;
+    if (sub === 'runtime') APM.svcSubTab.runtime = 'process';
+    if (sub === 'infra') APM.svcSubTab.runtime = 'instances';
+  }
   const tab = APM.serviceTab || 'overview';
   const h = APM.health(s);
   const kafkaCount = (APM.kafkaProducers || []).filter(p => p.svc === id).length + (APM.kafkaConsumers || []).filter(c => c.svc === id).length;
+  const dbCount = (APM.connectionPools || []).filter(p => p.svc === id).length + (APM.redisOps || []).filter(r => r.svc === id).length;
+  const depsCount = kafkaCount + dbCount;
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'traces', label: 'Traces' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'endpoints', label: 'Endpoints', count: APM.endpoints.length },
-    { id: 'db', label: 'DB Calls' },
-    { id: 'kafka', label: 'Kafka', count: kafkaCount || null },
-    { id: 'external', label: 'External' },
-    { id: 'exceptions', label: 'Exceptions', count: 4 },
-    { id: 'runtime', label: 'Runtime' },
-    { id: 'infra', label: 'Infra' }
+    { id: 'overview',   label: 'Overview' },
+    { id: 'endpoints',  label: 'Endpoints', count: APM.endpoints.length },
+    { id: 'signals',    label: 'Traces · Logs' },
+    { id: 'deps',       label: 'Dependencies', count: depsCount || null },
+    { id: 'runtime',    label: 'Runtime' },
+    { id: 'exceptions', label: 'Exceptions', count: 4 }
   ];
 
   const headerActiveAlerts = APM.alerts.filter(a => a.svc === s.id && a.state === 'firing');
@@ -164,20 +173,51 @@ APM.svcTab = function(tab) {
   APM.renderPage();
 };
 
+APM.svcSubTab = APM.svcSubTab || { signals:'traces', deps:'db', runtime:'process' };
+APM.setSvcSubTab = function(group, id) {
+  APM.svcSubTab[group] = id;
+  APM.renderPage();
+};
+
 APM.svcTabBody = function(s, tab) {
   switch (tab) {
-    case 'overview': return APM.svcOverview(s);
-    case 'traces': return APM.svcTraces(s);
-    case 'logs': return APM.svcLogs(s);
-    case 'endpoints': return APM.svcEndpoints(s);
-    case 'db': return APM.svcDB(s);
-    case 'kafka': return APM.svcKafka(s);
-    case 'external': return APM.svcExternal(s);
+    case 'overview':   return APM.svcOverview(s);
+    case 'endpoints':  return APM.svcEndpoints(s);
+    case 'signals':    return APM.svcSignals(s);
+    case 'deps':       return APM.svcDeps(s);
+    case 'runtime':    return APM.svcRuntimeAll(s);
     case 'exceptions': return APM.svcExceptions(s);
-    case 'runtime': return APM.svcRuntime(s);
-    case 'infra': return APM.svcInfra(s);
-    default: return APM.svcOverview(s);
+    default:           return APM.svcOverview(s);
   }
+};
+
+// ----- Nested-tab dispatchers (Signals / Deps / Runtime) -----
+APM.svcSignals = function(s) {
+  const t = APM.svcSubTab.signals || 'traces';
+  return `<div class="subtabs subtabs-nested">
+    <div class="subtab ${t==='traces'?'active':''}" onclick="APM.setSvcSubTab('signals','traces')">调用链 Traces</div>
+    <div class="subtab ${t==='logs'?'active':''}"   onclick="APM.setSvcSubTab('signals','logs')">日志 Logs</div>
+  </div>
+  ${t === 'logs' ? APM.svcLogs(s) : APM.svcTraces(s)}`;
+};
+APM.svcDeps = function(s) {
+  const t = APM.svcSubTab.deps || 'db';
+  const dbCount = (APM.connectionPools||[]).filter(p=>p.svc===s.id).length + (APM.redisOps||[]).filter(r=>r.svc===s.id).length;
+  const kafkaCount = (APM.kafkaProducers||[]).filter(p=>p.svc===s.id).length + (APM.kafkaConsumers||[]).filter(c=>c.svc===s.id).length;
+  return `<div class="subtabs subtabs-nested">
+    <div class="subtab ${t==='db'?'active':''}"       onclick="APM.setSvcSubTab('deps','db')">DB / Cache${dbCount?`<span class="pill-mini">${dbCount}</span>`:''}</div>
+    <div class="subtab ${t==='kafka'?'active':''}"    onclick="APM.setSvcSubTab('deps','kafka')">Kafka${kafkaCount?`<span class="pill-mini">${kafkaCount}</span>`:''}</div>
+    <div class="subtab ${t==='external'?'active':''}" onclick="APM.setSvcSubTab('deps','external')">External</div>
+  </div>
+  ${t === 'kafka' ? APM.svcKafka(s) : t === 'external' ? APM.svcExternal(s) : APM.svcDB(s)}`;
+};
+APM.svcRuntimeAll = function(s) {
+  const t = APM.svcSubTab.runtime || 'process';
+  return `<div class="subtabs subtabs-nested">
+    <div class="subtab ${t==='process'?'active':''}"   onclick="APM.setSvcSubTab('runtime','process')">进程 / JVM</div>
+    <div class="subtab ${t==='instances'?'active':''}" onclick="APM.setSvcSubTab('runtime','instances')">实例 / Infra</div>
+  </div>
+  ${t === 'instances' ? APM.svcInfra(s) : APM.svcRuntime(s)}`;
 };
 
 // ----- Overview tab: RED + golden signals -----

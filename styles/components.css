@@ -163,6 +163,22 @@ pre.code {
 .subtab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 .subtab .pill-mini { display:inline-block; margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--bg-hover); color: var(--text-3); font-weight: 600; }
 .subtab.active .pill-mini { background: var(--accent-weak); color: var(--accent); }
+.subtabs.subtabs-nested {
+  margin: 4px 0 12px;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 4px; gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.subtabs.subtabs-nested .subtab {
+  padding: 5px 12px; font-size: 12px; border-radius: 6px;
+  border-bottom: none;
+}
+.subtabs.subtabs-nested .subtab.active {
+  background: var(--bg-elev-0); color: var(--text-1);
+  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
 
 /* Tab views */
 .tab-view { display: none; }
