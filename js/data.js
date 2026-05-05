@@ -3,28 +3,36 @@ window.APM = window.APM || {};
 
 // Domain → Project hierarchy (tenant model)
 APM.domains = [
-  { id: 'cloud-prod', name: 'cloud-prod', label: '云端生产', color: 'var(--success)',
+  { id: 'internet', name: 'internet', label: '互联网', color: 'var(--success)',
     projects: [
       { id: 'eshop', name: 'eshop', label: '电商', color: 'var(--accent)' },
-      { id: 'crm', name: 'crm', label: '客户关系', color: 'var(--warning)' },
+      { id: 'crm', name: 'crm', label: '客户关系', color: 'var(--warning)' }
+    ]
+  },
+  { id: 'new-industry', name: 'new-industry', label: '新产业', color: 'var(--warning)',
+    projects: [
       { id: 'finance', name: 'finance', label: '财务', color: 'var(--purple)' }
     ]
   },
-  { id: 'idc-bj', name: 'idc-bj', label: '北京自建机房', color: 'var(--accent)',
+  { id: 'rnd', name: 'rnd', label: '研发', color: 'var(--purple)',
     projects: [
-      { id: 'oa', name: 'oa', label: '办公', color: 'var(--teal)' },
-      { id: 'hr', name: 'hr', label: '人力', color: 'var(--success)' },
-      { id: 'erp', name: 'erp', label: 'ERP', color: 'var(--accent)' }
+      { id: 'erp', name: 'erp', label: 'ERP 研发', color: 'var(--accent)' }
     ]
   },
-  { id: 'k8s-staging', name: 'k8s-staging', label: 'K8s 预发', color: 'var(--warning)',
+  { id: 'cloud', name: 'cloud', label: '云平台', color: 'var(--teal)',
     projects: [
       { id: 'eshop-stg', name: 'eshop', label: '电商-预发', color: 'var(--accent)' }
+    ]
+  },
+  { id: 'it', name: 'it', label: 'IT', color: 'var(--accent)',
+    projects: [
+      { id: 'oa', name: 'oa', label: '办公', color: 'var(--teal)' },
+      { id: 'hr', name: 'hr', label: '人力', color: 'var(--success)' }
     ]
   }
 ];
 
-APM.currentDomain = 'cloud-prod';
+APM.currentDomain = 'internet';
 APM.currentProject = 'eshop';
 
 // Service preset library (used by per-project mock fan-out)
