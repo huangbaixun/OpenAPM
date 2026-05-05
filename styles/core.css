@@ -70,7 +70,8 @@ body {
   transition: background .4s ease, color .3s ease;
 }
 
-.app { display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
+.app { display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; transition: grid-template-columns .22s ease; }
+.app.sidebar-collapsed { grid-template-columns: 56px 1fr; }
 .topbar { grid-column: 1 / -1; grid-row: 1; }
 .sidebar { grid-row: 2; }
 .main { grid-row: 2; padding: 20px 24px 60px; overflow: auto; }
@@ -167,6 +168,36 @@ body {
 .nav-item .count { margin-left:auto; font-size: 10.5px; color: var(--text-3); font-weight:500; background: var(--bg-hover); padding: 1px 7px; border-radius: 6px; }
 .nav-item.active .count { color: var(--accent); background: var(--accent-weak); }
 .nav-item .badge-mini { margin-left:auto; font-size:10px; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+/* Sidebar toggle button (collapse/expand) */
+.sidebar-toggle {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 4px 10px 8px;
+  font-size: 11px; color: var(--text-3); cursor: pointer;
+  border-bottom: 1px solid var(--border); margin: -4px -2px 8px;
+  user-select: none; transition: color .12s, background .12s;
+}
+.sidebar-toggle:hover { color: var(--text-1); }
+.sidebar-toggle .ic-collapse { flex-shrink: 0; transition: transform .22s ease; }
+.app.sidebar-collapsed .sidebar-toggle { justify-content: center; padding: 4px 0 8px; }
+.app.sidebar-collapsed .sidebar-toggle .ic-collapse { transform: rotate(180deg); }
+.app.sidebar-collapsed .sidebar-toggle .lbl { display: none; }
+
+/* Collapsed sidebar layout */
+.app.sidebar-collapsed .sidebar { padding: 14px 6px; }
+.app.sidebar-collapsed .brand { width: 56px; padding: 0; justify-content: center; gap: 0; border-right: 1px solid var(--border); }
+.app.sidebar-collapsed .brand > div:nth-child(2) { display: none; }
+.app.sidebar-collapsed .nav-group .label { display: none; }
+.app.sidebar-collapsed .nav-group { margin-bottom: 6px; }
+.app.sidebar-collapsed .nav-item {
+  position: relative;
+  justify-content: center; padding: 9px 0; gap: 0;
+}
+.app.sidebar-collapsed .nav-item .lbl { display: none; }
+.app.sidebar-collapsed .nav-item .badge-mini {
+  position: absolute; top: 3px; right: 6px;
+  margin-left: 0; min-width: 0; padding: 0 4px; font-size: 9px; line-height: 13px;
+}
 
 /* Headings */
 h1, h2, h3, h4 { margin: 0; letter-spacing: -0.015em; }

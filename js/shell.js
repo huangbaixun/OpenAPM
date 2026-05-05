@@ -1,13 +1,14 @@
 // ============ Shell: topbar, sidebar, page routing ============
 APM.currentPage = 'overview';
-APM.currentEnv = APM.currentEnv || 'production';
+APM.currentEnv = APM.currentEnv || 'all';
+APM.sidebarCollapsed = APM.sidebarCollapsed || false;
 APM.timeRange = APM.timeRange || { id: '1h', label: 'Last 1h' };
 APM.autoRefreshSec = APM.autoRefreshSec || 30;
 APM._envs = [
+  { id:'all',        label:'全部环境',    tag:'all',  color:'var(--text-3)' },
   { id:'production', label:'Production', tag:'prod', color:'var(--success)' },
   { id:'staging',    label:'Staging',    tag:'stg',  color:'var(--warning)' },
-  { id:'development',label:'Development',tag:'dev',  color:'var(--purple)' },
-  { id:'all',        label:'全部环境',    tag:'all',  color:'var(--text-3)' }
+  { id:'development',label:'Development',tag:'dev',  color:'var(--purple)' }
 ];
 APM._timeRanges = [
   { id:'15m', label:'最近 15 分钟', short:'Last 15m', kbd:'15m' },
@@ -141,17 +142,27 @@ APM.renderTopbar = function() {
 
 APM.renderSidebar = function() {
   const sb = document.getElementById('sidebar');
-  let html = '';
+  const collapsed = !!APM.sidebarCollapsed;
+  let html = `<div class="sidebar-toggle" onclick="APM.toggleSidebar()" title="${collapsed?'展开侧边栏':'收起侧边栏'}">
+    <svg class="ic-collapse" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    <span class="lbl">收起</span>
+  </div>`;
   APM.navItems.forEach(group => {
     html += `<div class="nav-group"><div class="label">${group.group}</div>`;
     group.items.forEach(it => {
       const active = it.id === APM.currentPage ? 'active' : '';
       const badge = it.badge ? `<span class="badge-mini" style="background:var(--danger); color:white;">${it.badge}</span>` : '';
-      html += `<div class="nav-item ${active}" data-page="${it.id}" onclick="APM.go('${it.id}')"><span class="ico">${it.icon}</span>${it.label}${badge}</div>`;
+      html += `<div class="nav-item ${active}" data-page="${it.id}" onclick="APM.go('${it.id}')" title="${it.label}"><span class="ico">${it.icon}</span><span class="lbl">${it.label}</span>${badge}</div>`;
     });
     html += '</div>';
   });
   sb.innerHTML = html;
+};
+
+APM.toggleSidebar = function() {
+  APM.sidebarCollapsed = !APM.sidebarCollapsed;
+  document.querySelector('.app').classList.toggle('sidebar-collapsed', APM.sidebarCollapsed);
+  APM.renderSidebar();
 };
 
 APM.go = function(page, params) {
@@ -200,12 +211,21 @@ APM.toggleDD = function(id, ev) {
 APM._applyProject = function(id) {
   APM.currentProject = id;
   // Swap active service set; fall back to eshop if no per-project preset.
-  APM.services = APM.projectServices[id] || APM.projectServices['eshop'];
+  APM._projectServicesAll = APM.projectServices[id] || APM.projectServices['eshop'];
+  APM._reapplyEnv();
   // Clear caches that snapshot APM.services (e.g. topology time replay).
   APM._svcOrig = null;
   // Reset selected service so service detail page can default to first of new set.
   if (APM.pageParams && APM.pageParams.id) APM.pageParams = {};
   APM.topoSelected = APM.services[0] && APM.services[0].id;
+};
+APM._reapplyEnv = function() {
+  const all = APM._projectServicesAll || APM.projectServices[APM.currentProject] || APM.projectServices['eshop'];
+  if (!APM.currentEnv || APM.currentEnv === 'all') {
+    APM.services = all.slice();
+  } else {
+    APM.services = all.filter(s => (s.env || 'production') === APM.currentEnv);
+  }
 };
 APM.pickDomain = function(id) {
   APM.currentDomain = id;
@@ -235,11 +255,12 @@ APM.manualRefresh = function() {
 };
 APM.pickEnv = function(envId) {
   APM.currentEnv = envId;
+  APM._reapplyEnv();
   const e = APM._envs.find(x=>x.id===envId);
   APM.toggleDD('envDD');
   APM.renderTopbar();
   APM.renderPage();
-  APM.toast('环境切换 → ' + e.label, 'info');
+  APM.toast(`环境切换 → ${e.label} · 命中 ${APM.services.length} 个服务`, 'info');
 };
 APM.pickTimeRange = function(rid) {
   const r = APM._timeRanges.find(x=>x.id===rid);

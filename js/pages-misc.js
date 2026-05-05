@@ -1,161 +1,13 @@
 // ============ Misc pages: Alerts, Exceptions, Dashboards, Onboarding, Database, Settings ============
 
-// -------- Alerts (N9e-integrated) --------
+// -------- Alerts (view-only · 配置统一在夜莺 Nightingale) --------
 APM.alertsTab = APM.alertsTab || 'firing';
+APM._n9eUrl = APM._n9eUrl || 'https://n9e.eshop.com';
 
-APM.silenceAlert = function(alertId) {
-  const a = APM.alerts.find(x=>x.id===alertId);
-  if (!a) return;
-  const m = APM.openModal({
-    title: `静音告警 · ${a.title}`,
-    width: 460,
-    body: `
-      ${APM.field('静音时长', APM.select('dur', [
-        {value:'5m', label:'5 分钟'},
-        {value:'30m', label:'30 分钟'},
-        {value:'1h', label:'1 小时'},
-        {value:'4h', label:'4 小时'},
-        {value:'until_resolved', label:'直到我手动解除'}
-      ], '30m'))}
-      ${APM.field('原因（写入审计日志）', APM.textarea('reason', '', 2))}
-    `,
-    footer: `<button class="pill" data-act="cancel">取消</button><button class="pill primary" data-act="ok">应用静音</button>`
-  });
-  m.el.querySelector('[data-act="cancel"]').onclick = () => m.close();
-  m.el.querySelector('[data-act="ok"]').onclick = () => {
-    const v = APM.modalForm(m.id);
-    a.silencedUntil = v.dur;
-    a.silenceReason = v.reason || '';
-    APM.logAudit('alert.silence', a.title + ' · ' + v.dur);
-    m.close();
-    APM.renderPage();
-    APM.toast(`已静音 · ${v.dur === 'until_resolved' ? '直到手动解除' : v.dur}`, 'success');
-  };
-};
-
-APM.unsilenceAlert = function(alertId) {
-  const a = APM.alerts.find(x=>x.id===alertId);
-  if (!a) return;
-  delete a.silencedUntil; delete a.silenceReason;
-  APM.logAudit('alert.unsilence', a.title);
-  APM.renderPage();
-  APM.toast('已解除静音', 'info');
-};
-
-APM.claimAlert = function(alertId) {
-  const a = APM.alerts.find(x=>x.id===alertId);
-  if (!a) return;
-  a.assignee = APM.currentUser.initials;
-  APM.logAudit('alert.claim', a.title);
-  APM.renderPage();
-  APM.toast(`已认领 · 处理人 ${APM.currentUser.initials}`, 'success');
-};
-
-APM.openCreateAlertRule = function() {
-  const svcOptions = ['*'].concat(APM.services.map(s => s.id));
-  const m = APM.openModal({
-    title: '新建告警规则',
-    width: 540,
-    body: `
-      ${APM.field('规则名称', APM.input('name', ''))}
-      <div class="form-grid-2">
-        ${APM.field('指标 (PromQL)', APM.input('metric', 'svc:err_rate'))}
-        ${APM.field('操作符', APM.select('op', ['>','<','>=','<=','=','!='], '>'))}
-      </div>
-      <div class="form-grid-2">
-        ${APM.field('阈值', APM.input('threshold', '1%'))}
-        ${APM.field('持续时长 (for)', APM.input('forDur', '5m'))}
-      </div>
-      <div class="form-grid-2">
-        ${APM.field('作用服务', APM.select('svc', svcOptions, '*'))}
-        ${APM.field('级别', APM.select('sev', [{value:'critical',label:'P1 critical'},{value:'warning',label:'P2 warning'}], 'warning'))}
-      </div>
-      <div class="form-help">规则将通过夜莺同步到 collector，2 分钟内生效。</div>
-    `,
-    footer: `<button class="pill" data-act="cancel">取消</button><button class="pill primary" data-act="ok">创建规则</button>`
-  });
-  m.el.querySelector('[data-act="cancel"]').onclick = () => m.close();
-  m.el.querySelector('[data-act="ok"]').onclick = () => {
-    const v = APM.modalForm(m.id);
-    if (!v.name) { APM.toast('请填写规则名称', 'warn'); return; }
-    APM.alertRules.unshift({
-      id: 'r-' + Date.now(),
-      name: v.name,
-      metric: v.metric,
-      op: v.op,
-      threshold: v.threshold,
-      forDur: v.forDur,
-      svc: v.svc,
-      sev: v.sev,
-      enabled: true
-    });
-    APM.logAudit('alert.rule.create', v.name);
-    m.close();
-    APM.alertsTab = 'rules';
-    APM.renderPage();
-    APM.toast('规则已创建', 'success');
-  };
-};
-
-APM.toggleAlertRule = function(id) {
-  const r = APM.alertRules.find(x=>x.id===id);
-  if (!r) return;
-  r.enabled = !r.enabled;
-  APM.logAudit('alert.rule.' + (r.enabled?'enable':'disable'), r.name);
-  APM.renderPage();
-  APM.toast(`规则已${r.enabled?'启用':'禁用'}`, r.enabled?'success':'warn');
-};
-
-APM.deleteAlertRule = function(id) {
-  const r = APM.alertRules.find(x=>x.id===id);
-  if (!r) return;
-  APM.confirm({
-    title:'删除规则',
-    msg:`确认删除告警规则 <strong>${r.name}</strong>？删除后将停止评估。`,
-    danger:true,
-    okLabel:'删除',
-    onOk: () => {
-      const idx = APM.alertRules.indexOf(r);
-      APM.alertRules.splice(idx,1);
-      APM.logAudit('alert.rule.delete', r.name);
-      APM.renderPage();
-      APM.toast('规则已删除', 'info');
-    }
-  });
-};
-
-APM.openSilenceCreate = function() {
-  const m = APM.openModal({
-    title: '新建抑制策略',
-    width: 460,
-    body: `
-      ${APM.field('Matcher（标签表达式）', APM.input('matcher', 'svc=order-service'))}
-      <div class="form-grid-2">
-        ${APM.field('过期时间', APM.input('expiresAt', '2026-05-06 00:00'))}
-        ${APM.field('原因', APM.input('reason', ''))}
-      </div>
-    `,
-    footer: `<button class="pill" data-act="cancel">取消</button><button class="pill primary" data-act="ok">创建</button>`
-  });
-  m.el.querySelector('[data-act="cancel"]').onclick = () => m.close();
-  m.el.querySelector('[data-act="ok"]').onclick = () => {
-    const v = APM.modalForm(m.id);
-    if (!v.matcher) { APM.toast('请填写 matcher', 'warn'); return; }
-    APM.silences.unshift({ id:'sil-'+Date.now(), matcher:v.matcher, creator:APM.currentUser.email, expiresAt:v.expiresAt, reason:v.reason });
-    APM.logAudit('silence.create', v.matcher);
-    m.close();
-    APM.renderPage();
-    APM.toast('抑制策略已创建', 'success');
-  };
-};
-
-APM.deleteSilence = function(id) {
-  const s = APM.silences.find(x=>x.id===id);
-  if (!s) return;
-  APM.confirm({
-    title:'解除抑制', msg:`确认解除抑制 <code>${s.matcher}</code> ？`, danger:true, okLabel:'解除',
-    onOk: () => { APM.silences.splice(APM.silences.indexOf(s),1); APM.logAudit('silence.delete', s.matcher); APM.renderPage(); APM.toast('已解除抑制','info'); }
-  });
+APM.openN9e = function(path, label) {
+  const url = APM._n9eUrl + (path || '');
+  window.open(url, '_blank');
+  APM.toast(`已在新窗口打开 · ${label || 'n9e'}`, 'info');
 };
 
 APM.setAlertsTab = function(tab) { APM.alertsTab = tab; APM.renderPage(); };
@@ -176,22 +28,19 @@ APM.renderAlerts = function() {
   const sevPill = (sev) => sev === 'critical'
     ? `<span class="badge err">P1 critical</span>`
     : `<span class="badge warn">P2 warning</span>`;
-  const stateIcon = (s, silenced) => silenced
-    ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--text-3);font-weight:600;">🔕 已静音</span>`
-    : s === 'firing'
+  const stateIcon = (s) =>
+    s === 'firing'
     ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--danger);font-weight:600;"><span class="pulse-dot"></span>firing</span>`
     : s === 'pending'
     ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--warning);font-weight:600;">●pending</span>`
     : `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--success);font-weight:600;">✓ resolved</span>`;
 
   const row = (a) => {
-    const silenced = !!a.silencedUntil;
-    const claimed = !!a.assignee;
-    return `<tr class="clickable" ${silenced?'style="opacity:.55;"':''}>
-      <td>${stateIcon(a.state, silenced)}</td>
+    return `<tr class="clickable">
+      <td>${stateIcon(a.state)}</td>
       <td>${sevPill(a.sev)}</td>
       <td><div style="font-weight:600;color:var(--text-1);">${a.title}</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:2px;">${a.rule}${claimed?` · 处理人 <strong style="color:var(--accent);">${a.assignee}</strong>`:''}${silenced?` · 静音至 ${a.silencedUntil}`:''}</div></td>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:2px;">${a.rule}</div></td>
       <td><a class="link" onclick="APM.go('service',{id:'${a.svc}'})">${a.svc}</a></td>
       <td class="mono" style="color:var(--text-2);">${a.startedAt}</td>
       <td class="mono" style="color:var(--text-2);">${a.duration}</td>
@@ -200,12 +49,7 @@ APM.renderAlerts = function() {
         n9e
       </span></td>
       <td style="text-align:right;">
-        ${silenced
-          ? `<button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.unsilenceAlert('${a.id}')">解除静音</button>`
-          : `<button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.silenceAlert('${a.id}')">静音</button>`}
-        ${claimed
-          ? `<button class="pill" style="padding:4px 8px;font-size:11px;" disabled>已认领（${a.assignee}）</button>`
-          : `<button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.claimAlert('${a.id}')">认领</button>`}
+        <a class="link" onclick="APM.openN9e('/alert-his-events/${a.id}','告警事件 ${a.title}')" style="font-size:11.5px;cursor:pointer;">在 n9e 中处理 ↗</a>
       </td>
     </tr>`;
   };
@@ -222,35 +66,39 @@ APM.renderAlerts = function() {
     <td><span class="chip">${r.svc}</span></td>
     <td>${r.enabled ? '<span class="badge ok">● enabled</span>' : '<span class="badge">disabled</span>'}</td>
     <td style="text-align:right;padding-right:14px;">
-      <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.toggleAlertRule('${r.id}')">${r.enabled?'禁用':'启用'}</button>
-      <button class="pill danger" style="padding:4px 8px;font-size:11px;" onclick="APM.deleteAlertRule('${r.id}')">删除</button>
+      <a class="link" onclick="APM.openN9e('/alert-rules/${r.id}','规则 ${r.name}')" style="font-size:11.5px;cursor:pointer;">在 n9e 编辑 ↗</a>
     </td>
   </tr>`;
 
-  const schedulesView = () => `<div class="grid-2" style="padding:14px;">
-    ${APM.schedules.map(s => `<div class="card">
-      <div style="font-weight:600;font-size:13.5px;">${s.team}</div>
-      <div style="display:flex;gap:14px;margin-top:8px;">
-        <div><div style="font-size:11px;color:var(--text-3);">当前值班</div><div style="font-size:18px;font-weight:600;color:var(--accent);">${s.current}</div></div>
-        <div><div style="font-size:11px;color:var(--text-3);">下班接替</div><div style="font-size:18px;font-weight:600;color:var(--text-2);">${s.next}</div></div>
-        <div style="margin-left:auto;text-align:right;"><div style="font-size:11px;color:var(--text-3);">${s.tz}</div><div class="mono" style="font-size:12px;color:var(--text-2);">${s.shiftStart} – ${s.shiftEnd}</div></div>
-      </div>
-    </div>`).join('')}
+  const schedulesView = () => `<div style="padding:14px;">
+    <div class="between" style="margin-bottom:10px;">
+      <div style="font-size:12px;color:var(--text-3);">${APM.schedules.length} 个值班轮询 · 视图同步自 n9e Schedule</div>
+      <a class="link" onclick="APM.openN9e('/oncall','值班排班')" style="font-size:12px;cursor:pointer;">在 n9e 编辑排班 ↗</a>
+    </div>
+    <div class="grid-2">
+      ${APM.schedules.map(s => `<div class="card">
+        <div style="font-weight:600;font-size:13.5px;">${s.team}</div>
+        <div style="display:flex;gap:14px;margin-top:8px;">
+          <div><div style="font-size:11px;color:var(--text-3);">当前值班</div><div style="font-size:18px;font-weight:600;color:var(--accent);">${s.current}</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);">下班接替</div><div style="font-size:18px;font-weight:600;color:var(--text-2);">${s.next}</div></div>
+          <div style="margin-left:auto;text-align:right;"><div style="font-size:11px;color:var(--text-3);">${s.tz}</div><div class="mono" style="font-size:12px;color:var(--text-2);">${s.shiftStart} – ${s.shiftEnd}</div></div>
+        </div>
+      </div>`).join('')}
+    </div>
   </div>`;
 
   const silencesView = () => `<div style="padding:14px;">
     <div class="between" style="margin-bottom:10px;">
-      <div style="font-size:12px;color:var(--text-3);">${APM.silences.length} 条抑制策略</div>
-      <button class="pill primary" style="padding:5px 10px;font-size:12px;" onclick="APM.openSilenceCreate()">+ 新建抑制</button>
+      <div style="font-size:12px;color:var(--text-3);">${APM.silences.length} 条抑制策略 · 视图同步自 n9e Silence</div>
+      <a class="link" onclick="APM.openN9e('/alert-mutes','抑制策略')" style="font-size:12px;cursor:pointer;">在 n9e 管理抑制 ↗</a>
     </div>
     ${APM.silences.length === 0 ? '<div class="placeholder"><div class="icon">🔕</div>暂无抑制策略</div>' : `<table class="tbl">
-      <thead><tr><th style="padding-left:14px;">Matcher</th><th>创建人</th><th>过期</th><th>原因</th><th></th></tr></thead>
+      <thead><tr><th style="padding-left:14px;">Matcher</th><th>创建人</th><th>过期</th><th>原因</th></tr></thead>
       <tbody>${APM.silences.map(s => `<tr>
         <td style="padding-left:14px;font-family:var(--mono);font-size:12px;">${s.matcher}</td>
         <td class="mono" style="color:var(--text-3);">${s.creator}</td>
         <td class="mono" style="color:var(--text-2);">${s.expiresAt}</td>
         <td style="font-size:12px;">${s.reason || '—'}</td>
-        <td style="text-align:right;padding-right:14px;"><button class="pill danger" style="padding:4px 8px;font-size:11px;" onclick="APM.deleteSilence('${s.id}')">解除</button></td>
       </tr>`).join('')}</tbody>
     </table>`}
   </div>`;
@@ -259,21 +107,21 @@ APM.renderAlerts = function() {
     <div class="between">
       <div>
         <div class="page-title">告警 Alerts${svcFilter ? ` <span style="font-size:13px;color:var(--text-3);font-weight:500;">· 过滤: ${svcFilter}</span>` : ''}</div>
-        <div class="page-sub">通过 <strong>夜莺 Nightingale</strong> 同步 · 当前 ${firing.length} 个 firing · ${pending.length} 个 pending</div>
+        <div class="page-sub">视图模式 · 通过 <strong>夜莺 Nightingale</strong> 同步 · 当前 ${firing.length} 个 firing · ${pending.length} 个 pending</div>
       </div>
       <div style="display:flex;gap:8px;">
         ${svcFilter ? `<button class="pill" onclick="APM.pageParams={};APM.renderPage();">清除过滤</button>` : ''}
-        <button class="pill primary" onclick="APM.openCreateAlertRule()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          新建告警规则
+        <button class="pill primary" onclick="APM.openN9e('/alert-rules','告警规则')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          在 n9e 配置规则 ↗
         </button>
       </div>
     </div>
 
     <div class="banner info" style="margin-top:14px;">
       <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span class="grow">告警引擎由 <strong>夜莺 (Nightingale)</strong> 提供 · 规则与值班、订阅、抑制策略在 <a onclick="window.open('https://n9e.eshop.com','_blank');APM.toast('已在新窗口打开 n9e.eshop.com','info')" style="cursor:pointer;">n9e.eshop.com</a> 统一管理 · 此处展示触发实例并可下钻至 trace / log。</span>
-      <button class="pill" style="padding:5px 10px;font-size:12px;" onclick="window.open('https://n9e.eshop.com','_blank');APM.toast('已在新窗口打开 n9e.eshop.com','info')">在 n9e 中打开</button>
+      <span class="grow">本页仅供 <strong>查看</strong> · 告警规则、值班排班、抑制策略统一在 <a onclick="APM.openN9e('','n9e 控制台')" style="cursor:pointer;">n9e.eshop.com</a> 配置 · APM 端展示触发实例并可下钻至 trace / log。</span>
+      <button class="pill" style="padding:5px 10px;font-size:12px;" onclick="APM.openN9e('','n9e 控制台')">打开 n9e ↗</button>
     </div>
 
     <div class="grid-4" style="margin-top:14px;">
@@ -294,10 +142,14 @@ APM.renderAlerts = function() {
       </div>
       ${tab === 'firing' || tab === 'pending' || tab === 'resolved' ? `
         ${bodyContent ? `<table class="tbl">
-          <thead><tr><th style="width:90px;">状态</th><th style="width:100px;">级别</th><th>告警</th><th style="width:140px;">服务</th><th style="width:90px;">触发时刻</th><th style="width:80px;">持续</th><th style="width:80px;">来源</th><th style="width:160px;text-align:right;">操作</th></tr></thead>
+          <thead><tr><th style="width:90px;">状态</th><th style="width:100px;">级别</th><th>告警</th><th style="width:140px;">服务</th><th style="width:90px;">触发时刻</th><th style="width:80px;">持续</th><th style="width:80px;">来源</th><th style="width:140px;text-align:right;">操作</th></tr></thead>
           <tbody>${bodyContent}</tbody>
         </table>` : `<div class="placeholder" style="margin:24px;"><div class="icon">${tab==='firing'?'✓':tab==='resolved'?'✓':'…'}</div>暂无 ${tab} 告警</div>`}
       ` : tab === 'rules' ? `
+        <div class="between" style="padding:10px 14px 0;">
+          <div style="font-size:12px;color:var(--text-3);">${APM.alertRules.length} 条规则 · 视图同步自 n9e</div>
+          <a class="link" onclick="APM.openN9e('/alert-rules','告警规则')" style="font-size:12px;cursor:pointer;">在 n9e 新建规则 ↗</a>
+        </div>
         <table class="tbl">
           <thead><tr><th style="padding-left:14px;">规则名</th><th>级别</th><th>条件</th><th>服务</th><th>状态</th><th></th></tr></thead>
           <tbody>${APM.alertRules.map(ruleRow).join('')}</tbody>

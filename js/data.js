@@ -40,9 +40,9 @@ APM.projectServices = {
     { id: 'gateway', name: 'gateway', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 4820, errPct: 0.18, p99: 142, apdex: 0.96, alerts: 0, instances: 3, env: 'production', spark: [40,38,42,45,41,39,43,40,46,42,44,40,38,42] },
     { id: 'checkout-service', name: 'checkout-service', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 1230, errPct: 0.42, p99: 318, apdex: 0.91, alerts: 1, instances: 4, env: 'production', spark: [60,58,55,62,57,54,68,72,65,80,78,82,90,88] },
     { id: 'payment-service', name: 'payment-service', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 820, errPct: 0.06, p99: 320, apdex: 0.94, alerts: 0, instances: 3, env: 'production', spark: [55,52,58,54,50,56,58,52,54,50,52,48,46,50] },
-    { id: 'risk-service', name: 'risk-service', lang: 'Go', langColor: _goIco, langText: 'Go', rpm: 640, errPct: 0.32, p99: 820, apdex: 0.86, alerts: 1, instances: 2, env: 'production', spark: [70,75,80,78,85,90,82,88,95,92,98,90,94,92] },
+    { id: 'risk-service', name: 'risk-service', lang: 'Go', langColor: _goIco, langText: 'Go', rpm: 640, errPct: 0.32, p99: 820, apdex: 0.86, alerts: 1, instances: 2, env: 'staging', spark: [70,75,80,78,85,90,82,88,95,92,98,90,94,92] },
     { id: 'order-service', name: 'order-service', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 520, errPct: 0.12, p99: 196, apdex: 0.95, alerts: 0, instances: 2, env: 'production', spark: [40,42,38,44,41,40,46,42,44,40,42,38,40,42] },
-    { id: 'notify-service', name: 'notify-service', lang: 'Node.js', langColor: _nodeIco, langText: 'JS', rpm: 410, errPct: 0.04, p99: 88, apdex: 0.98, alerts: 0, instances: 4, env: 'production', spark: [30,28,32,30,28,32,28,30,28,30,28,30,28,30] },
+    { id: 'notify-service', name: 'notify-service', lang: 'Node.js', langColor: _nodeIco, langText: 'JS', rpm: 410, errPct: 0.04, p99: 88, apdex: 0.98, alerts: 0, instances: 4, env: 'development', spark: [30,28,32,30,28,32,28,30,28,30,28,30,28,30] },
     { id: 'user-service', name: 'user-service', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 380, errPct: 0.02, p99: 92, apdex: 0.97, alerts: 0, instances: 2, env: 'production', spark: [22,24,20,26,22,20,24,22,24,20,22,20,18,20] },
     { id: 'auth-service', name: 'auth-service', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 240, errPct: 0.08, p99: 68, apdex: 0.97, alerts: 0, instances: 2, env: 'production', spark: [18,20,18,16,18,20,16,18,20,18,16,18,20,18] },
     { id: 'ledger-service', name: 'ledger-service', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 180, errPct: 5.20, p99: 1020, apdex: 0.62, alerts: 2, instances: 2, env: 'production', spark: [40,45,50,55,62,68,75,82,90,95,98,90,92,95] }
@@ -50,31 +50,31 @@ APM.projectServices = {
   'crm': [
     { id: 'crm-api', name: 'crm-api', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 320, errPct: 0.12, p99: 218, apdex: 0.95, alerts: 0, instances: 2, env: 'production', spark: [22,24,20,26,22,20,24,22,24,20,22,20,18,20] },
     { id: 'lead-svc', name: 'lead-svc', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 140, errPct: 0.21, p99: 412, apdex: 0.92, alerts: 0, instances: 2, env: 'production', spark: [30,32,28,34,30,28,32,30,32,28,30,28,26,28] },
-    { id: 'segment-pipeline', name: 'segment-pipeline', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 80, errPct: 0.04, p99: 920, apdex: 0.88, alerts: 1, instances: 1, env: 'production', spark: [12,14,16,12,14,18,16,14,16,18,16,14,12,14] },
+    { id: 'segment-pipeline', name: 'segment-pipeline', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 80, errPct: 0.04, p99: 920, apdex: 0.88, alerts: 1, instances: 1, env: 'staging', spark: [12,14,16,12,14,18,16,14,16,18,16,14,12,14] },
     { id: 'sms-gateway', name: 'sms-gateway', lang: 'Go', langColor: _goIco, langText: 'Go', rpm: 60, errPct: 0.32, p99: 86, apdex: 0.98, alerts: 0, instances: 2, env: 'production', spark: [8,10,8,12,10,8,10,12,10,8,10,12,8,10] }
   ],
   'finance': [
     { id: 'invoice-api', name: 'invoice-api', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 240, errPct: 0.06, p99: 280, apdex: 0.96, alerts: 0, instances: 2, env: 'production', spark: [18,20,18,22,20,18,20,22,20,18,20,18,16,18] },
-    { id: 'reconcile-svc', name: 'reconcile-svc', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 60, errPct: 0.0, p99: 4200, apdex: 0.78, alerts: 1, instances: 1, env: 'production', spark: [80,90,75,82,88,92,85,90,95,88,92,90,86,88] },
+    { id: 'reconcile-svc', name: 'reconcile-svc', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 60, errPct: 0.0, p99: 4200, apdex: 0.78, alerts: 1, instances: 1, env: 'staging', spark: [80,90,75,82,88,92,85,90,95,88,92,90,86,88] },
     { id: 'tax-calc', name: 'tax-calc', lang: 'Go', langColor: _goIco, langText: 'Go', rpm: 180, errPct: 0.02, p99: 64, apdex: 0.99, alerts: 0, instances: 2, env: 'production', spark: [16,14,18,16,14,18,16,14,18,16,14,16,18,14] },
     { id: 'fx-rate', name: 'fx-rate', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 90, errPct: 0.18, p99: 142, apdex: 0.97, alerts: 0, instances: 1, env: 'production', spark: [10,12,10,14,12,10,14,12,10,14,12,10,12,14] }
   ],
   // ---- idc-bj ----
   'oa': [
     { id: 'oa-portal', name: 'oa-portal', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 240, errPct: 0.04, p99: 312, apdex: 0.95, alerts: 0, instances: 2, env: 'production', spark: [20,22,18,24,22,20,22,20,18,22,20,18,16,20] },
-    { id: 'workflow-engine', name: 'workflow-engine', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 120, errPct: 0.42, p99: 980, apdex: 0.84, alerts: 1, instances: 2, env: 'production', spark: [30,32,38,42,40,46,52,48,55,62,58,64,60,66] },
+    { id: 'workflow-engine', name: 'workflow-engine', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 120, errPct: 0.42, p99: 980, apdex: 0.84, alerts: 1, instances: 2, env: 'staging', spark: [30,32,38,42,40,46,52,48,55,62,58,64,60,66] },
     { id: 'doc-svc', name: 'doc-svc', lang: 'Node.js', langColor: _nodeIco, langText: 'JS', rpm: 60, errPct: 0.02, p99: 84, apdex: 0.98, alerts: 0, instances: 2, env: 'production', spark: [8,10,12,10,8,10,12,8,10,12,10,8,10,12] }
   ],
   'hr': [
     { id: 'hr-api', name: 'hr-api', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 80, errPct: 0.06, p99: 218, apdex: 0.96, alerts: 0, instances: 2, env: 'production', spark: [10,8,12,10,8,12,10,8,10,12,8,10,12,8] },
-    { id: 'payroll-job', name: 'payroll-job', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 12, errPct: 0.0, p99: 5400, apdex: 0.72, alerts: 0, instances: 1, env: 'production', spark: [60,75,82,90,95,98,90,85,88,92,85,90,95,88] },
+    { id: 'payroll-job', name: 'payroll-job', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 12, errPct: 0.0, p99: 5400, apdex: 0.72, alerts: 0, instances: 1, env: 'development', spark: [60,75,82,90,95,98,90,85,88,92,85,90,95,88] },
     { id: 'benefits-portal', name: 'benefits-portal', lang: 'Node.js', langColor: _nodeIco, langText: 'JS', rpm: 45, errPct: 0.04, p99: 92, apdex: 0.98, alerts: 0, instances: 1, env: 'production', spark: [6,8,6,10,8,6,8,10,6,8,10,6,8,10] }
   ],
   'erp': [
     { id: 'erp-api', name: 'erp-api', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 320, errPct: 0.18, p99: 412, apdex: 0.93, alerts: 0, instances: 4, env: 'production', spark: [22,24,28,32,28,30,34,32,30,28,30,28,26,30] },
     { id: 'inventory-svc', name: 'inventory-svc', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 240, errPct: 0.32, p99: 620, apdex: 0.88, alerts: 1, instances: 3, env: 'production', spark: [40,42,46,52,48,52,56,58,52,56,58,52,54,56] },
-    { id: 'mrp-runner', name: 'mrp-runner', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 30, errPct: 0.0, p99: 8200, apdex: 0.65, alerts: 0, instances: 1, env: 'production', spark: [70,82,88,92,95,98,92,88,90,92,88,92,90,88] },
-    { id: 'bi-export', name: 'bi-export', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 18, errPct: 0.06, p99: 320, apdex: 0.95, alerts: 0, instances: 1, env: 'production', spark: [12,14,12,16,14,12,16,14,12,14,12,14,12,14] }
+    { id: 'mrp-runner', name: 'mrp-runner', lang: 'Java', langColor: _javaIco, langText: '☕', rpm: 30, errPct: 0.0, p99: 8200, apdex: 0.65, alerts: 0, instances: 1, env: 'staging', spark: [70,82,88,92,95,98,92,88,90,92,88,92,90,88] },
+    { id: 'bi-export', name: 'bi-export', lang: 'Python', langColor: _pyIco, langText: 'Py', rpm: 18, errPct: 0.06, p99: 320, apdex: 0.95, alerts: 0, instances: 1, env: 'development', spark: [12,14,12,16,14,12,16,14,12,14,12,14,12,14] }
   ],
   // ---- k8s-staging ----
   'eshop-stg': [
