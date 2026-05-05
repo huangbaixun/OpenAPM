@@ -1,9 +1,11 @@
 // ============ App bootstrap ============
 document.addEventListener('DOMContentLoaded', () => {
-  APM._projectServicesAll = APM.projectServices[APM.currentProject] || APM.projectServices['eshop'];
-  APM._reapplyEnv();
-  if (APM.sidebarCollapsed) document.querySelector('.app').classList.add('sidebar-collapsed');
-  APM.renderTopbar();
-  APM.renderSidebar();
-  APM.renderPage();
+  if (APM.isAuthed && APM.isAuthed()) {
+    APM._bootApp();
+  } else if (APM.renderLogin) {
+    APM.renderLogin();
+  } else {
+    // Fallback if auth.js failed to load: boot anyway.
+    APM._bootApp ? APM._bootApp() : (APM.renderTopbar(), APM.renderSidebar(), APM.renderPage());
+  }
 });

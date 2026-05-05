@@ -511,6 +511,86 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--mon
 .cluster-summary-card .name { font-size: 12.5px; font-weight: 600; color: var(--text-1); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cluster-summary-card .stat { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
 
+/* ============ Login screen ============ */
+#login-root {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+}
+.login-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(60% 50% at 18% 22%, rgba(0,113,227,0.18), transparent 60%),
+    radial-gradient(50% 60% at 86% 78%, rgba(255,107,0,0.18), transparent 60%),
+    radial-gradient(40% 40% at 50% 110%, rgba(159,122,234,0.16), transparent 70%),
+    var(--bg-app);
+  z-index: -1;
+}
+.login-card {
+  width: 380px; max-width: 92vw;
+  padding: 36px 32px 24px;
+  background: var(--bg-elev-0);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 28px 72px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.04);
+  text-align: center;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+.login-logo {
+  width: 56px; height: 56px; margin: 0 auto 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff3b30 0%, #ff6a00 55%, #ff9f0a 100%);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px #ffffff25;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.login-logo svg { width: 30px; height: 30px; }
+.login-title { font-size: 20px; font-weight: 600; color: var(--text-1); letter-spacing: -0.015em; }
+.login-title .sub { color: var(--text-3); font-size: 13px; font-weight: 500; margin-left: 2px; }
+.login-sub { color: var(--text-3); font-size: 12.5px; margin-top: 4px; margin-bottom: 26px; }
+.login-field { text-align: left; margin-bottom: 12px; }
+.login-field label {
+  display: block; font-size: 11px; color: var(--text-3); font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px;
+}
+.login-field input {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; font-size: 13.5px;
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  border-radius: 9px; color: var(--text-1);
+  outline: none; transition: border-color .12s, box-shadow .12s;
+  font-family: inherit;
+}
+.login-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.login-err {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  padding: 8px 10px; border-radius: 7px; font-size: 12px;
+  margin: 4px 0 12px; text-align: center;
+}
+.login-btn {
+  width: 100%; padding: 11px 14px; margin-top: 6px;
+  background: var(--accent); color: white;
+  border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  cursor: pointer; transition: filter .12s, transform .06s;
+  font-family: inherit;
+}
+.login-btn:hover { filter: brightness(1.06); }
+.login-btn:active { transform: translateY(1px); }
+.login-hint {
+  margin-top: 18px; padding-top: 16px;
+  border-top: 1px dashed var(--border);
+  font-size: 11.5px; color: var(--text-3);
+}
+.login-hint code {
+  background: var(--bg-elev-2); padding: 1px 5px; border-radius: 4px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-2);
+}
+
 /* ============ Pill button danger variant ============ */
 .pill.danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
 .pill.danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
