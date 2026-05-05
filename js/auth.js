@@ -89,6 +89,12 @@ APM._bootApp = function() {
   APM._reapplyEnv && APM._reapplyEnv();
   const app = document.querySelector('.app');
   if (app && APM.sidebarCollapsed) app.classList.add('sidebar-collapsed');
+  // Honor URL hash on first paint so deep links + browser refresh land on the right page.
+  const initial = APM._decodeHash && APM._decodeHash();
+  if (initial && initial.page) {
+    APM.currentPage = initial.page;
+    APM.pageParams = initial.params || {};
+  }
   APM.renderTopbar();
   APM.renderSidebar();
   APM.renderPage();

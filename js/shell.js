@@ -118,6 +118,7 @@ APM.renderTopbar = function() {
           <option value="60" ${APM.autoRefreshSec===60?'selected':''}>1m</option>
           <option value="300" ${APM.autoRefreshSec===300?'selected':''}>5m</option>
         </select>
+        <span id="refreshCountdown" class="refresh-countdown"></span>
       </div>
 
       <button class="icon-btn" title="告警 (${APM.activeAlertCount} firing)" onclick="APM.go('alerts')" style="position:relative;">
@@ -139,6 +140,9 @@ APM.renderTopbar = function() {
       </div>
     </div>
   `;
+  // Refresh countdown span gets re-created on every topbar render — fill it immediately
+  // so there's no 1-second blank gap before the interval tick.
+  if (APM._updateRefreshCountdown) APM._updateRefreshCountdown();
 };
 
 APM.renderSidebar = function() {
@@ -167,12 +171,50 @@ APM.toggleSidebar = function() {
   APM.renderSidebar();
 };
 
+// ---------- URL hash routing ----------
+// Format: #/<page>?key=val&key2=val2 — supports browser back/forward + bookmarks.
+APM._encodeHash = function(page, params) {
+  let h = '#/' + (page || 'overview');
+  const obj = params || {};
+  const keys = Object.keys(obj).filter(k => obj[k] !== undefined && obj[k] !== null && obj[k] !== '');
+  if (keys.length) {
+    const usp = new URLSearchParams();
+    keys.forEach(k => usp.set(k, String(obj[k])));
+    h += '?' + usp.toString();
+  }
+  return h;
+};
+APM._decodeHash = function() {
+  const h = (location.hash || '').replace(/^#\/?/, '');
+  if (!h) return null;
+  const qIdx = h.indexOf('?');
+  const page = qIdx >= 0 ? h.slice(0, qIdx) : h;
+  const params = {};
+  if (qIdx >= 0) {
+    const usp = new URLSearchParams(h.slice(qIdx + 1));
+    usp.forEach((v, k) => { params[k] = v; });
+  }
+  return { page: page || 'overview', params };
+};
+
 APM.go = function(page, params) {
+  APM._navigate(page, params, false);
+};
+APM._navigate = function(page, params, fromHash) {
   APM.currentPage = page;
   APM.pageParams = params || {};
+  if (!fromHash) {
+    const next = APM._encodeHash(page, params);
+    if (location.hash !== next) {
+      APM._suppressHashChange = true;
+      location.hash = next;
+      setTimeout(() => { APM._suppressHashChange = false; }, 50);
+    }
+  }
   APM.renderSidebar();
   APM.renderPage();
-  document.querySelector('.main').scrollTop = 0;
+  const m = document.querySelector('.main');
+  if (m) m.scrollTop = 0;
 };
 
 APM.renderPage = function() {
@@ -301,14 +343,30 @@ APM.openCustomTimeRange = function() {
     APM.toast('已应用自定义时间', 'success');
   };
 };
+APM._updateRefreshCountdown = function() {
+  const el = document.getElementById('refreshCountdown');
+  if (!el) return;
+  if (!APM.autoRefreshSec || !APM._refreshNextAt) { el.textContent = ''; return; }
+  const remaining = Math.max(0, Math.ceil((APM._refreshNextAt - Date.now()) / 1000));
+  el.textContent = remaining < 60 ? remaining + 's' : Math.ceil(remaining/60) + 'm';
+};
 APM.setAutoRefresh = function(secStr) {
   const sec = parseInt(secStr || '0', 10) || 0;
   APM.autoRefreshSec = sec;
   if (APM._refreshTimer) { clearInterval(APM._refreshTimer); APM._refreshTimer = null; }
+  if (APM._countdownTimer) { clearInterval(APM._countdownTimer); APM._countdownTimer = null; }
   if (sec > 0) {
-    APM._refreshTimer = setInterval(() => APM.manualRefresh(), sec * 1000);
+    APM._refreshNextAt = Date.now() + sec * 1000;
+    APM._refreshTimer = setInterval(() => {
+      APM._refreshNextAt = Date.now() + sec * 1000;
+      APM.manualRefresh();
+    }, sec * 1000);
+    APM._countdownTimer = setInterval(APM._updateRefreshCountdown, 1000);
+    APM._updateRefreshCountdown();
     APM.toast(`自动刷新已启用 · ${sec >= 60 ? sec/60 + 'm' : sec + 's'}`, 'info');
   } else {
+    APM._refreshNextAt = null;
+    APM._updateRefreshCountdown();
     APM.toast('自动刷新已关闭', 'info');
   }
 };
@@ -327,6 +385,12 @@ document.addEventListener('click', (e) => {
   document.querySelectorAll('.dd.open').forEach(d => {
     if (!d.contains(e.target)) d.classList.remove('open');
   });
+});
+
+window.addEventListener('hashchange', () => {
+  if (APM._suppressHashChange) return;
+  const r = APM._decodeHash();
+  if (r) APM._navigate(r.page, r.params, true);
 });
 
 // ============ Sparkline helper ============

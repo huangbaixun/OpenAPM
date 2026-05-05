@@ -57,6 +57,13 @@
   font-size: 12px; font-weight: 500; padding: 0 8px 0 4px; height: 30px;
   border-left: 1px solid var(--border);
 }
+.refresh-countdown {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-3); padding: 0 8px; min-width: 28px;
+  text-align: center; height: 30px; line-height: 30px;
+  border-left: 1px solid var(--border);
+}
+.refresh-countdown:empty { display: none; }
 
 /* Avatar */
 .avatar {
