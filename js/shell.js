@@ -133,7 +133,7 @@ APM.renderTopbar = function() {
         <div class="dd-menu" style="min-width: 200px;">
           <div class="dd-section">${APM.currentUser.email}</div>
           <div class="dd-item" onclick="APM.go('settings');APM.toggleDD('userDD')"><span>个人设置</span></div>
-          <div class="dd-item" onclick="APM.toast('快捷键面板：⌘K','info');APM.toggleDD('userDD')"><span>快捷键</span></div>
+          <div class="dd-item" onclick="APM.toggleDD('userDD');APM.openCmdk();"><span>命令面板</span><span class="kbd">⌘K</span></div>
           <div class="dd-sep"></div>
           <div class="dd-item" onclick="APM.signOut()"><span style="color:var(--danger);">注销</span></div>
         </div>
