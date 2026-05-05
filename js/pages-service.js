@@ -366,12 +366,45 @@ APM.svcDB = function(s) {
   const txs = (APM.transactions || []).filter(t => t.svc === s.id);
   // Redis ops by this service.
   const redis = (APM.redisOps || []).filter(r => r.svc === s.id);
+  // Connected clusters (unique by clusterId from queries / pool / txs / redis)
+  const dbClusterIds = new Set();
+  queries.forEach(q => q.clusterId && dbClusterIds.add(q.clusterId));
+  (APM.connectionPools||[]).filter(p=>p.svc===s.id).forEach(p => dbClusterIds.add(p.clusterId));
+  txs.forEach(t => t.clusterId && dbClusterIds.add(t.clusterId));
+  const redisClusterIds = new Set();
+  redis.forEach(r => r.clusterId && redisClusterIds.add(r.clusterId));
   return `
     <div class="banner info">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <div class="grow">展示 <strong>${s.name}</strong> 出口的 SQL / Redis 调用 · 已自动按 service.name 过滤</div>
       <a onclick="APM.go('database')" style="cursor:pointer;">在 DB Calls 页打开 →</a>
     </div>
+
+    ${(dbClusterIds.size + redisClusterIds.size) > 0 ? `
+    <div class="section-h" style="margin-top:14px;"><h3>连接的集群 (${dbClusterIds.size + redisClusterIds.size})</h3></div>
+    <div class="cluster-summary-row">
+      ${[...dbClusterIds].map(id => {
+        const c = APM.dbClusters.find(x=>x.id===id); if (!c) return '';
+        const meta = APM.dbTypeMeta[c.type] || {label:c.type, icon:''};
+        return `<div class="cluster-summary-card" onclick="APM.openDbClusterDetail('${id}')">
+          <div class="ico type-badge-${c.type}">${meta.icon||'🗄'}</div>
+          <div class="body">
+            <div class="name">${c.name}</div>
+            <div class="stat">${meta.label} · ${c.qps} QPS · P99 ${c.p99}ms</div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${[...redisClusterIds].map(id => {
+        const c = APM.redisClusters.find(x=>x.id===id); if (!c) return '';
+        return `<div class="cluster-summary-card" onclick="APM.openRedisClusterDetail('${id}')">
+          <div class="ico type-badge-redis">⚡</div>
+          <div class="body">
+            <div class="name">${c.name}</div>
+            <div class="stat">Redis · ${c.qps} QPS · 命中 ${c.hitPct}%</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
 
     <div class="grid-4" style="margin-top:14px;">
       <div class="card kpi"><div class="name">SQL 模板</div><div class="value">${queries.length}<span class="unit"> 个</span></div><div class="delta flat">${s.id} 出口</div></div>
@@ -447,12 +480,30 @@ APM.svcKafka = function(s) {
   const producedRate = producers.reduce((a,b)=>a+b.rate, 0);
   const consumedRate = consumers.reduce((a,b)=>a+b.rate, 0);
   const totalLag = consumers.reduce((a,b)=>a+b.lag, 0);
+  const kafkaClusterIds = new Set();
+  producers.forEach(p => kafkaClusterIds.add(p.clusterId));
+  consumers.forEach(c => kafkaClusterIds.add(c.clusterId));
   return `
     <div class="banner info">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <div class="grow">展示 <strong>${s.name}</strong> 的 Kafka 调用 · ${producers.length} 个 publish 关系 · ${consumers.length} 个 subscribe 关系</div>
+      <div class="grow">展示 <strong>${s.name}</strong> 的 Kafka 调用 · ${producers.length} 个 publish 关系 · ${consumers.length} 个 subscribe 关系 · 跨 ${kafkaClusterIds.size} 个集群</div>
       <a onclick="APM.go('kafka')" style="cursor:pointer;">在 Kafka 页打开 →</a>
     </div>
+
+    ${kafkaClusterIds.size > 0 ? `
+    <div class="section-h" style="margin-top:14px;"><h3>连接的 Kafka 集群</h3></div>
+    <div class="cluster-summary-row">
+      ${[...kafkaClusterIds].map(id => {
+        const c = APM.kafkaClusters.find(x=>x.id===id); if (!c) return '';
+        return `<div class="cluster-summary-card" onclick="APM.openKafkaClusterDetail('${id}')">
+          <div class="ico type-badge-kafka">⊞</div>
+          <div class="body">
+            <div class="name">${c.name}</div>
+            <div class="stat">${c.brokers} brokers · ${c.throughputInMB} MB/s in</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
 
     <div class="grid-4" style="margin-top:14px;">
       <div class="card kpi"><div class="name">Publish 速率</div><div class="value">${producedRate.toLocaleString()}<span class="unit"> msg/s</span></div><div class="delta flat">${producers.length} topic</div></div>

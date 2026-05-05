@@ -2,22 +2,114 @@
 // Sub-tabs: topics · groups · producers · consumers · cluster
 // Drawers: topic details (partition lag heatmap, sample messages), group details (member assignment, reset offset)
 
-APM.kafkaTab = APM.kafkaTab || 'topics';
+APM.kafkaTab = APM.kafkaTab || 'clusters';
 APM.kafkaTopicFilter = APM.kafkaTopicFilter || '';
+APM.kafkaClusterFilter = APM.kafkaClusterFilter || 'all';
 APM.setKafkaTab = function(t) { APM.kafkaTab = t; APM.renderPage(); };
 APM.setKafkaTopicFilter = function(v) { APM.kafkaTopicFilter = v; APM.renderPage(); };
+APM.setKafkaClusterFilter = function(id) { APM.kafkaClusterFilter = id; APM.renderPage(); };
 
-// ---- Aggregates ----
+APM._kafkaApplyClusterFilter = function(rows) {
+  if (APM.kafkaClusterFilter === 'all') return rows;
+  return rows.filter(r => r.clusterId === APM.kafkaClusterFilter);
+};
+
+APM._kafkaClusterFilterBar = function() {
+  return `<div class="cluster-filter-bar">
+    <span class="lbl">集群</span>
+    <div class="cf-chip ${APM.kafkaClusterFilter==='all'?'active':''}" onclick="APM.setKafkaClusterFilter('all')">全部</div>
+    ${APM.kafkaClusters.map(c => `<div class="cf-chip ${APM.kafkaClusterFilter===c.id?'active':''}" onclick="APM.setKafkaClusterFilter('${c.id}')"><span class="dot" style="background:${c.status==='warn'?'var(--warning)':'#1f2937'};"></span>${c.name}</div>`).join('')}
+  </div>`;
+};
+
+// ---- Aggregates (cluster-aware: respects kafkaClusterFilter) ----
 APM._kafkaAggregates = function() {
-  const t = APM.kafkaTopics;
-  const totalPartitions = t.reduce((a,b)=>a+b.partitions, 0);
-  const totalRate = t.reduce((a,b)=>a+b.msgRate, 0);
-  const totalMB = t.reduce((a,b)=>a+b.mbRate, 0);
-  const totalLag = APM.kafkaGroups.reduce((a,b)=>a+b.lag, 0);
-  const rebalances = APM.kafkaGroups.reduce((a,b)=>a+b.rebalances1h, 0);
+  const topics = APM._kafkaApplyClusterFilter(APM.kafkaTopics);
+  const groups = APM._kafkaApplyClusterFilter(APM.kafkaGroups);
+  const producers = APM._kafkaApplyClusterFilter(APM.kafkaProducers);
+  const totalPartitions = topics.reduce((a,b)=>a+b.partitions, 0);
+  const totalRate = topics.reduce((a,b)=>a+b.msgRate, 0);
+  const totalMB = topics.reduce((a,b)=>a+b.mbRate, 0);
+  const totalLag = groups.reduce((a,b)=>a+b.lag, 0);
+  const rebalances = groups.reduce((a,b)=>a+b.rebalances1h, 0);
   const lagColor = totalLag > 10000 ? 'var(--danger)' : totalLag > 1000 ? 'var(--warning)' : 'var(--success)';
-  const errProducers = APM.kafkaProducers.filter(p => p.errPct > 0).length;
-  return { totalPartitions, totalRate, totalMB, totalLag, lagColor, rebalances, errProducers };
+  const errProducers = producers.filter(p => p.errPct > 0).length;
+  return { totalPartitions, totalRate, totalMB, totalLag, lagColor, rebalances, errProducers, topicCount: topics.length, groupCount: groups.length };
+};
+
+APM.openKafkaClusterDetail = function(id) {
+  const c = APM.kafkaClusters.find(x => x.id === id);
+  if (!c) return;
+  const topics = APM.kafkaTopics.filter(t => t.clusterId === id);
+  const groups = APM.kafkaGroups.filter(g => g.clusterId === id);
+  const brokers = APM.kafkaBrokers.filter(b => b.clusterId === id);
+  APM.openModal({
+    title: `${c.name} · Kafka 集群详情`,
+    width: 860,
+    body: `
+      <div class="grid-4" style="margin-bottom:14px;">
+        <div class="card kpi"><div class="name">Brokers</div><div class="value">${brokers.length}</div></div>
+        <div class="card kpi"><div class="name">Topics / Groups</div><div class="value">${topics.length}<span class="unit"> / ${groups.length}</span></div></div>
+        <div class="card kpi"><div class="name">In / Out</div><div class="value">${c.throughputInMB}<span class="unit"> / ${c.throughputOutMB} MB/s</span></div></div>
+        <div class="card kpi"><div class="name">Total Lag</div><div class="value" style="color:${c.lagTotal>10000?'var(--danger)':c.lagTotal>1000?'var(--warning)':'var(--success)'};">${c.lagTotal.toLocaleString()}</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
+        <div><strong>版本</strong> Kafka v${c.version} · ${c.region}</div>
+        <div><strong>状态</strong> ${c.status === 'warn' ? '<span style="color:var(--warning);">⚠ warn</span>' : '<span style="color:var(--success);">✓ ok</span>'}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">Brokers</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>ID</th><th>Host</th><th>ISR</th><th>磁盘</th><th>net in/out</th></tr></thead>
+        <tbody>${brokers.map(b=>`<tr><td class="mono">${b.id}${b.controller?' <span class="badge purple" style="font-size:10px;">controller</span>':''}</td><td class="mono">${b.host}</td><td class="mono">${b.isr}</td><td class="mono ${b.diskPct>80?'err':b.diskPct>70?'warn':''}">${b.diskPct}%</td><td class="mono">${b.netInMB.toFixed(1)} / ${b.netOutMB.toFixed(1)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">Top Topics (按速率)</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>Topic</th><th>Partition</th><th>速率</th><th>Lag</th></tr></thead>
+        <tbody>${topics.slice().sort((a,b)=>b.msgRate-a.msgRate).slice(0,5).map(t=>`<tr><td class="mono">${t.name}</td><td class="mono">${t.partitions}</td><td class="mono">${t.msgRate} msg/s</td><td class="mono">${t.lag.toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table></div>
+    `,
+    footer: `<button class="pill" data-act="close">关闭</button><button class="pill primary" data-act="filter">过滤到此集群</button>`
+  }).el.addEventListener('click', (ev) => {
+    const act = ev.target.dataset.act; if (!act) return;
+    APM.closeModal(ev.currentTarget.id);
+    if (act === 'filter') { APM.setKafkaClusterFilter(id); APM.kafkaTab='topics'; APM.renderPage(); }
+  });
+};
+
+APM.kafkaClustersTab = function() {
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:14px;">
+      <div class="cluster-grid">
+        ${APM.kafkaClusters.map(c => {
+          const brokers = APM.kafkaBrokers.filter(b=>b.clusterId===c.id);
+          const warnBroker = brokers.find(b=>b.status==='warn');
+          const statusCls = c.status === 'warn' ? 'warn' : c.status === 'err' ? 'err' : 'ok';
+          return `<div class="cluster-card" onclick="APM.openKafkaClusterDetail('${c.id}')">
+            <div class="cc-head">
+              <div style="min-width:0;">
+                <div class="cc-name">${c.name}</div>
+                <div class="cc-meta">${c.brokers} brokers · v${c.version}</div>
+              </div>
+              <span class="cc-type-badge type-badge-kafka">⊞ Kafka</span>
+              <div class="cc-status ${statusCls}"></div>
+            </div>
+            <div class="cc-kpis">
+              <div class="cc-kpi"><span class="lbl">Topics</span><span class="val">${c.topicCount}</span></div>
+              <div class="cc-kpi"><span class="lbl">Groups</span><span class="val">${c.groupCount}</span></div>
+              <div class="cc-kpi"><span class="lbl">In MB/s</span><span class="val">${c.throughputInMB}</span></div>
+              <div class="cc-kpi"><span class="lbl">Lag</span><span class="val ${c.lagTotal>10000?'err':c.lagTotal>1000?'warn':''}">${c.lagTotal>=1000?(c.lagTotal/1000).toFixed(1)+'K':c.lagTotal}</span></div>
+            </div>
+            <div class="cc-spark">${APM.sparkline(c.spark, '#374151', 240, 28)}</div>
+            <div class="cc-foot">
+              <span>${c.region}</span><span>·</span>
+              <span>out ${c.throughputOutMB} MB/s</span>
+              ${warnBroker?`<span style="margin-left:auto;color:var(--warning);">⚠ ${warnBroker.host.split(':')[0]}</span>`:`<span style="margin-left:auto;">${brokers.length} broker · ok</span>`}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
 };
 
 APM.lagBadgeColor = function(lag) {
@@ -69,10 +161,10 @@ APM.renderKafka = function() {
     </div>
 
     <div class="grid-4" style="margin-top:14px;">
-      <div class="card kpi"><div class="name">Topic / Partition</div><div class="value">${APM.kafkaTopics.length}<span class="unit"> · ${agg.totalPartitions} part</span></div><div class="delta flat">replication = 3 (avg)</div></div>
+      <div class="card kpi"><div class="name">集群</div><div class="value">${APM.kafkaClusters.length}<span class="unit"> · ${APM.kafkaBrokers.length} brokers</span></div><div class="delta flat">${APM.kafkaClusterFilter==='all'?'全部集群':APM.kafkaClusters.find(c=>c.id===APM.kafkaClusterFilter)?.name}</div></div>
+      <div class="card kpi"><div class="name">Topic / Partition</div><div class="value">${agg.topicCount}<span class="unit"> · ${agg.totalPartitions} part</span></div><div class="delta flat">replication = 3 (avg)</div></div>
       <div class="card kpi"><div class="name">消息速率</div><div class="value">${(agg.totalRate/1000).toFixed(1)}<span class="unit"> k msg/s</span></div><div class="delta flat">${agg.totalMB.toFixed(1)} MB/s</div></div>
       <div class="card kpi"><div class="name">Consumer Lag</div><div class="value" style="color:${agg.lagColor};">${agg.totalLag.toLocaleString()}</div><div class="delta flat">${agg.totalLag > 10000 ? '严重 · 需介入' : agg.totalLag > 1000 ? '上升中' : '健康'}</div></div>
-      <div class="card kpi"><div class="name">异常 / Rebalance · 1h</div><div class="value">${agg.errProducers}<span class="unit"> err</span> / ${agg.rebalances}<span class="unit"> reb</span></div><div class="delta flat">${agg.rebalances > 3 ? 'group 抖动' : '稳定'}</div></div>
     </div>
 
     <div class="grid-2">
@@ -118,11 +210,12 @@ APM.renderKafka = function() {
 
     <div class="subtabs">
       ${[
-        ['topics','Topic 列表', APM.kafkaTopics.length],
-        ['groups','Consumer Group', APM.kafkaGroups.length],
-        ['producers','Producer', APM.kafkaProducers.length],
-        ['consumers','Consumer', APM.kafkaConsumers.length],
-        ['cluster','集群健康', APM.kafkaBrokers.length]
+        ['clusters','集群', APM.kafkaClusters.length],
+        ['topics','Topic 列表', agg.topicCount],
+        ['groups','Consumer Group', agg.groupCount],
+        ['producers','Producer', APM._kafkaApplyClusterFilter(APM.kafkaProducers).length],
+        ['consumers','Consumer', APM._kafkaApplyClusterFilter(APM.kafkaConsumers).length],
+        ['brokers','Broker 健康', APM._kafkaApplyClusterFilter(APM.kafkaBrokers).length]
       ].map(([id,l,c]) => `<div class="subtab ${tab===id?'active':''}" onclick="APM.setKafkaTab('${id}')">${l}<span class="pill-mini">${c}</span></div>`).join('')}
     </div>
 
@@ -131,56 +224,60 @@ APM.renderKafka = function() {
 };
 
 APM.kafkaTabBody = function(tab, preselectTopic, preselectGroup) {
+  if (tab === 'clusters')  return APM.kafkaClustersTab();
   if (tab === 'topics')    return APM.kafkaTopicsTable(preselectTopic);
   if (tab === 'groups')    return APM.kafkaGroupsTable(preselectGroup);
   if (tab === 'producers') return APM.kafkaProducersTable();
   if (tab === 'consumers') return APM.kafkaConsumersTable();
-  if (tab === 'cluster')   return APM.kafkaClusterPanel();
+  if (tab === 'brokers')   return APM.kafkaClusterPanel();
 };
 
 // ---- Topic table + drawer ----
 APM.kafkaTopicsTable = function(preselect) {
   const f = (APM.kafkaTopicFilter || '').toLowerCase();
-  const list = APM.kafkaTopics.filter(t => !f || t.name.toLowerCase().includes(f) || t.owner.toLowerCase().includes(f));
-  return `
-    <div class="between" style="margin-bottom:10px;">
+  let list = APM._kafkaApplyClusterFilter(APM.kafkaTopics);
+  list = list.filter(t => !f || t.name.toLowerCase().includes(f) || t.owner.toLowerCase().includes(f));
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._kafkaClusterFilterBar()}
+    <div class="between" style="margin: 10px 14px;">
       <div class="searchbox" style="padding:6px 10px;min-width:280px;">${APM.svgI.search}<input placeholder="按 topic 名 / owner 服务过滤" value="${f.replace(/"/g,'&quot;')}" data-focus-key="kafka-topic-filter" oninput="APM.bindRetainedInput(event,'kafka-topic-filter',APM.setKafkaTopicFilter)"></div>
-      <div style="font-size:12px;color:var(--text-3);">${list.length === APM.kafkaTopics.length ? '' : list.length + ' / '}${APM.kafkaTopics.length} topics</div>
+      <div style="font-size:12px;color:var(--text-3);">${list.length} topics</div>
     </div>
-    ${list.length === 0 ? '<div class="placeholder"><div class="icon">🔍</div>未匹配 topic</div>' : `<div class="card" style="padding:0;overflow:hidden;">
-      <table class="tbl">
-        <thead><tr>
-          <th style="padding-left:14px;">Topic</th>
-          <th style="width:90px;">Partition</th>
-          <th style="width:80px;">ISR</th>
-          <th style="width:120px;">速率</th>
-          <th style="width:100px;">Lag</th>
-          <th style="width:100px;">P99 pub/con</th>
-          <th style="width:90px;">Owner</th>
-          <th style="width:80px;">告警</th>
-          <th style="width:130px;text-align:right;">操作</th>
-        </tr></thead>
-        <tbody>${list.map(t => {
-          const isrOk = t.isr === t.replication;
-          return `<tr class="clickable" onclick="APM.openKafkaTopicDetail('${t.name}')">
-            <td style="padding-left:14px;"><strong>${t.name}</strong>${t.cleanup === 'compact' ? `<span class="badge purple" style="margin-left:6px;font-size:10px;">compact</span>` : ''}<div style="font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px;">retention ${t.retention}</div></td>
-            <td class="mono">${t.partitions}</td>
-            <td class="mono ${isrOk?'':'err'}" style="${isrOk?'':'color:var(--danger);font-weight:600;'}">${t.isr}/${t.replication}</td>
-            <td class="mono">${t.msgRate} msg/s<div style="font-size:11px;color:var(--text-3);">${t.mbRate.toFixed(1)} MB/s</div></td>
-            <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(t.lag)} 18%, transparent);color:${APM.lagBadgeColor(t.lag)};font-family:var(--mono);">${t.lag.toLocaleString()}</span></td>
-            <td class="mono"><span style="color:${t.p99PubMs>20?'var(--warning)':'inherit'};">${t.p99PubMs}</span> / <span style="color:${t.p99ConMs>50?'var(--warning)':'inherit'};">${t.p99ConMs}</span><span style="color:var(--text-3);">ms</span></td>
-            <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${t.owner}'})">${t.owner}</a></td>
-            <td>${t.alerts > 0 ? `<span class="badge err">${t.alerts}</span>` : '<span class="badge muted">—</span>'}</td>
-            <td style="text-align:right;padding-right:14px;">
-              <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${t.name}')">详情</button>
-              <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{topic:'${t.name}'})">Traces</button>
-            </td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>`}
+    ${list.length === 0 ? '<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>当前过滤下未匹配 topic</div>' : `<table class="tbl">
+      <thead><tr>
+        <th style="padding-left:14px;">Topic</th>
+        <th style="width:120px;">集群</th>
+        <th style="width:90px;">Partition</th>
+        <th style="width:80px;">ISR</th>
+        <th style="width:120px;">速率</th>
+        <th style="width:100px;">Lag</th>
+        <th style="width:100px;">P99 pub/con</th>
+        <th style="width:90px;">Owner</th>
+        <th style="width:80px;">告警</th>
+        <th style="width:130px;text-align:right;">操作</th>
+      </tr></thead>
+      <tbody>${list.map(t => {
+        const isrOk = t.isr === t.replication;
+        const cluster = APM.kafkaClusters.find(c=>c.id===t.clusterId);
+        return `<tr class="clickable" onclick="APM.openKafkaTopicDetail('${t.name}')">
+          <td style="padding-left:14px;"><strong>${t.name}</strong>${t.cleanup === 'compact' ? `<span class="badge purple" style="margin-left:6px;font-size:10px;">compact</span>` : ''}<div style="font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px;">retention ${t.retention}</div></td>
+          <td>${cluster?`<a class="link" onclick="event.stopPropagation();APM.openKafkaClusterDetail('${cluster.id}')">${cluster.name}</a>`:'—'}</td>
+          <td class="mono">${t.partitions}</td>
+          <td class="mono ${isrOk?'':'err'}" style="${isrOk?'':'color:var(--danger);font-weight:600;'}">${t.isr}/${t.replication}</td>
+          <td class="mono">${t.msgRate} msg/s<div style="font-size:11px;color:var(--text-3);">${t.mbRate.toFixed(1)} MB/s</div></td>
+          <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(t.lag)} 18%, transparent);color:${APM.lagBadgeColor(t.lag)};font-family:var(--mono);">${t.lag.toLocaleString()}</span></td>
+          <td class="mono"><span style="color:${t.p99PubMs>20?'var(--warning)':'inherit'};">${t.p99PubMs}</span> / <span style="color:${t.p99ConMs>50?'var(--warning)':'inherit'};">${t.p99ConMs}</span><span style="color:var(--text-3);">ms</span></td>
+          <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${t.owner}'})">${t.owner}</a></td>
+          <td>${t.alerts > 0 ? `<span class="badge err">${t.alerts}</span>` : '<span class="badge muted">—</span>'}</td>
+          <td style="text-align:right;padding-right:14px;">
+            <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${t.name}')">详情</button>
+            <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{topic:'${t.name}'})">Traces</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
     ${preselect ? `<script>setTimeout(() => APM.openKafkaTopicDetail(${JSON.stringify(preselect)}), 50)</script>` : ''}
-  `;
+  </div>`;
 };
 
 APM.openKafkaTopicDetail = function(name) {
@@ -286,40 +383,43 @@ APM.openKafkaTopicDetail = function(name) {
 
 // ---- Consumer Groups ----
 APM.kafkaGroupsTable = function(preselect) {
-  return `
-    <div class="card" style="padding:0;overflow:hidden;">
-      <table class="tbl">
-        <thead><tr>
-          <th style="padding-left:14px;">Group</th>
-          <th style="width:80px;">Members</th>
-          <th>订阅 Topics</th>
-          <th style="width:100px;">Lag</th>
-          <th style="width:80px;">Δ Lag</th>
-          <th style="width:100px;">Status</th>
-          <th style="width:120px;">Rebalance · 1h</th>
-          <th style="width:160px;text-align:right;">操作</th>
-        </tr></thead>
-        <tbody>${APM.kafkaGroups.map(g => {
-          const stColor = g.status === 'lag-rising' ? 'var(--danger)' : g.status === 'idle' ? 'var(--text-3)' : 'var(--success)';
-          const dColor = g.lagDelta.startsWith('+') && parseInt(g.lagDelta,10) > 100 ? 'var(--danger)' : g.lagDelta.startsWith('-') ? 'var(--success)' : 'var(--text-3)';
-          return `<tr class="clickable" onclick="APM.openKafkaGroupDetail('${g.name}')">
-            <td style="padding-left:14px;font-weight:600;">${g.name}</td>
-            <td class="mono">${g.members}</td>
-            <td>${g.topics.map(t => `<span class="chip" style="margin-right:4px;cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${t}')">${t}</span>`).join('')}</td>
-            <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(g.lag)} 18%, transparent);color:${APM.lagBadgeColor(g.lag)};font-family:var(--mono);">${g.lag.toLocaleString()}</span></td>
-            <td class="mono" style="color:${dColor};font-weight:600;">${g.lagDelta}</td>
-            <td><span style="color:${stColor};font-weight:600;font-size:12px;">${g.status === 'lag-rising' ? '● 落后' : g.status === 'idle' ? '○ 空闲' : '● 稳定'}</span></td>
-            <td class="mono" style="color:${g.rebalances1h > 3 ? 'var(--warning)' : 'var(--text-3)'};">${g.rebalances1h} 次<div style="font-size:10.5px;color:var(--text-3);">最近 ${g.lastRebalance}</div></td>
-            <td style="text-align:right;padding-right:14px;">
-              <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaGroupDetail('${g.name}')">详情</button>
-              <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaResetOffset('${g.name}')">重置 offset</button>
-            </td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>
+  const list = APM._kafkaApplyClusterFilter(APM.kafkaGroups);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._kafkaClusterFilterBar()}
+    ${list.length === 0 ? '<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>当前过滤下无 group</div>' : `<table class="tbl">
+      <thead><tr>
+        <th style="padding-left:14px;">Group</th>
+        <th style="width:120px;">集群</th>
+        <th style="width:80px;">Members</th>
+        <th>订阅 Topics</th>
+        <th style="width:100px;">Lag</th>
+        <th style="width:80px;">Δ Lag</th>
+        <th style="width:100px;">Status</th>
+        <th style="width:120px;">Rebalance · 1h</th>
+        <th style="width:160px;text-align:right;">操作</th>
+      </tr></thead>
+      <tbody>${list.map(g => {
+        const stColor = g.status === 'lag-rising' ? 'var(--danger)' : g.status === 'idle' ? 'var(--text-3)' : 'var(--success)';
+        const dColor = g.lagDelta.startsWith('+') && parseInt(g.lagDelta,10) > 100 ? 'var(--danger)' : g.lagDelta.startsWith('-') ? 'var(--success)' : 'var(--text-3)';
+        const cluster = APM.kafkaClusters.find(c=>c.id===g.clusterId);
+        return `<tr class="clickable" onclick="APM.openKafkaGroupDetail('${g.name}')">
+          <td style="padding-left:14px;font-weight:600;">${g.name}</td>
+          <td>${cluster?`<a class="link" onclick="event.stopPropagation();APM.openKafkaClusterDetail('${cluster.id}')">${cluster.name}</a>`:'—'}</td>
+          <td class="mono">${g.members}</td>
+          <td>${g.topics.map(t => `<span class="chip" style="margin-right:4px;cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${t}')">${t}</span>`).join('')}</td>
+          <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(g.lag)} 18%, transparent);color:${APM.lagBadgeColor(g.lag)};font-family:var(--mono);">${g.lag.toLocaleString()}</span></td>
+          <td class="mono" style="color:${dColor};font-weight:600;">${g.lagDelta}</td>
+          <td><span style="color:${stColor};font-weight:600;font-size:12px;">${g.status === 'lag-rising' ? '● 落后' : g.status === 'idle' ? '○ 空闲' : '● 稳定'}</span></td>
+          <td class="mono" style="color:${g.rebalances1h > 3 ? 'var(--warning)' : 'var(--text-3)'};">${g.rebalances1h} 次<div style="font-size:10.5px;color:var(--text-3);">最近 ${g.lastRebalance}</div></td>
+          <td style="text-align:right;padding-right:14px;">
+            <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaGroupDetail('${g.name}')">详情</button>
+            <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.openKafkaResetOffset('${g.name}')">重置 offset</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
     ${preselect ? `<script>setTimeout(() => APM.openKafkaGroupDetail(${JSON.stringify(preselect)}), 50)</script>` : ''}
-  `;
+  </div>`;
 };
 
 APM.openKafkaGroupDetail = function(name) {
@@ -428,70 +528,90 @@ APM.openKafkaResetOffset = function(groupName) {
 
 // ---- Producer & Consumer tables ----
 APM.kafkaProducersTable = function() {
+  const list = APM._kafkaApplyClusterFilter(APM.kafkaProducers);
   return `<div class="card" style="padding:0;overflow:hidden;">
-    <table class="tbl">
-      <thead><tr><th style="padding-left:14px;">服务</th><th>Topic</th><th>速率</th><th>错误率</th><th>P99 publish</th><th></th></tr></thead>
-      <tbody>${APM.kafkaProducers.map(p => `<tr class="clickable" onclick="APM.go('service',{id:'${p.svc}'})">
-        <td style="padding-left:14px;"><a class="link">${p.svc}</a></td>
-        <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${p.topic}')">${p.topic}</span></td>
-        <td class="mono">${p.rate} msg/s</td>
-        <td class="mono" style="color:${p.errPct>0.1?'var(--warning)':p.errPct>0?'var(--text-2)':'var(--text-3)'};">${p.errPct.toFixed(2)}%</td>
-        <td class="mono ${p.p99PubMs>20?'warn':''}">${p.p99PubMs}ms</td>
-        <td style="text-align:right;padding-right:14px;"><button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{svcFilter:'${p.svc}',topic:'${p.topic}'})">Traces</button></td>
-      </tr>`).join('')}</tbody>
-    </table>
+    ${APM._kafkaClusterFilterBar()}
+    ${list.length===0?'<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>无 producer</div>':`<table class="tbl">
+      <thead><tr><th style="padding-left:14px;">服务</th><th>集群</th><th>Topic</th><th>速率</th><th>错误率</th><th>P99 publish</th><th></th></tr></thead>
+      <tbody>${list.map(p => {
+        const cluster = APM.kafkaClusters.find(c=>c.id===p.clusterId);
+        return `<tr class="clickable" onclick="APM.go('service',{id:'${p.svc}'})">
+          <td style="padding-left:14px;"><a class="link">${p.svc}</a></td>
+          <td>${cluster?`<a class="link" onclick="event.stopPropagation();APM.openKafkaClusterDetail('${cluster.id}')">${cluster.name}</a>`:'—'}</td>
+          <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${p.topic}')">${p.topic}</span></td>
+          <td class="mono">${p.rate} msg/s</td>
+          <td class="mono" style="color:${p.errPct>0.1?'var(--warning)':p.errPct>0?'var(--text-2)':'var(--text-3)'};">${p.errPct.toFixed(2)}%</td>
+          <td class="mono ${p.p99PubMs>20?'warn':''}">${p.p99PubMs}ms</td>
+          <td style="text-align:right;padding-right:14px;"><button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{svcFilter:'${p.svc}',topic:'${p.topic}'})">Traces</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
   </div>`;
 };
 
 APM.kafkaConsumersTable = function() {
+  const list = APM._kafkaApplyClusterFilter(APM.kafkaConsumers);
   return `<div class="card" style="padding:0;overflow:hidden;">
-    <table class="tbl">
-      <thead><tr><th style="padding-left:14px;">服务</th><th>Group</th><th>Topic</th><th>速率</th><th>P99 consume</th><th>Lag</th><th></th></tr></thead>
-      <tbody>${APM.kafkaConsumers.map(c => `<tr class="clickable" onclick="APM.go('service',{id:'${c.svc}'})">
-        <td style="padding-left:14px;"><a class="link">${c.svc}</a></td>
-        <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaGroupDetail('${c.group}')">${c.group}</span></td>
-        <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${c.topic}')">${c.topic}</span></td>
-        <td class="mono">${c.rate} msg/s</td>
-        <td class="mono ${c.p99ConMs>50?'warn':''}">${c.p99ConMs}ms</td>
-        <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(c.lag)} 18%, transparent);color:${APM.lagBadgeColor(c.lag)};font-family:var(--mono);">${c.lag.toLocaleString()}</span></td>
-        <td style="text-align:right;padding-right:14px;"><button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{svcFilter:'${c.svc}',topic:'${c.topic}'})">Traces</button></td>
-      </tr>`).join('')}</tbody>
-    </table>
+    ${APM._kafkaClusterFilterBar()}
+    ${list.length===0?'<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>无 consumer</div>':`<table class="tbl">
+      <thead><tr><th style="padding-left:14px;">服务</th><th>集群</th><th>Group</th><th>Topic</th><th>速率</th><th>P99 consume</th><th>Lag</th><th></th></tr></thead>
+      <tbody>${list.map(c => {
+        const cluster = APM.kafkaClusters.find(x=>x.id===c.clusterId);
+        return `<tr class="clickable" onclick="APM.go('service',{id:'${c.svc}'})">
+          <td style="padding-left:14px;"><a class="link">${c.svc}</a></td>
+          <td>${cluster?`<a class="link" onclick="event.stopPropagation();APM.openKafkaClusterDetail('${cluster.id}')">${cluster.name}</a>`:'—'}</td>
+          <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaGroupDetail('${c.group}')">${c.group}</span></td>
+          <td><span class="chip" style="cursor:pointer;" onclick="event.stopPropagation();APM.openKafkaTopicDetail('${c.topic}')">${c.topic}</span></td>
+          <td class="mono">${c.rate} msg/s</td>
+          <td class="mono ${c.p99ConMs>50?'warn':''}">${c.p99ConMs}ms</td>
+          <td><span class="badge" style="background:color-mix(in srgb, ${APM.lagBadgeColor(c.lag)} 18%, transparent);color:${APM.lagBadgeColor(c.lag)};font-family:var(--mono);">${c.lag.toLocaleString()}</span></td>
+          <td style="text-align:right;padding-right:14px;"><button class="pill" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();APM.go('traces',{svcFilter:'${c.svc}',topic:'${c.topic}'})">Traces</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`}
   </div>`;
 };
 
-// ---- Cluster panel ----
+// ---- Broker panel (per-cluster) ----
 APM.kafkaClusterPanel = function() {
-  return `
-    <div class="grid-3">
-      ${APM.kafkaBrokers.map(b => `<div class="card">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:6px;height:24px;border-radius:3px;background:${b.status==='warn'?'var(--warning)':'var(--success)'};"></div>
-          <strong>broker-${b.id}</strong>
-          ${b.controller ? '<span class="badge purple" style="font-size:10px;">controller</span>' : ''}
-          <span style="margin-left:auto;font-size:11px;color:var(--text-3);">${b.status === 'warn' ? '● 警示' : '● 正常'}</span>
-        </div>
-        <div class="mono" style="font-size:11.5px;color:var(--text-3);margin-top:4px;">${b.host}</div>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">
-          <div><div style="font-size:11px;color:var(--text-3);">ISR / leader</div><div style="font-size:18px;font-weight:600;">${b.isr} / ${b.leader}</div></div>
-          <div><div style="font-size:11px;color:var(--text-3);">磁盘</div><div style="font-size:18px;font-weight:600;color:${b.diskPct>70?'var(--warning)':'var(--text-1)'};">${b.diskPct}%</div></div>
-        </div>
-        <div class="bar" style="margin-top:8px;height:5px;"><span style="width:${b.diskPct}%;background:${b.diskPct>70?'var(--warning)':'var(--accent)'};"></span></div>
-        <div style="display:flex;gap:14px;margin-top:10px;font-size:11.5px;color:var(--text-2);">
-          <span><span style="color:var(--text-3);">net in</span> <strong>${b.netInMB.toFixed(1)} MB/s</strong></span>
-          <span><span style="color:var(--text-3);">net out</span> <strong>${b.netOutMB.toFixed(1)} MB/s</strong></span>
-        </div>
-      </div>`).join('')}
+  const brokers = APM._kafkaApplyClusterFilter(APM.kafkaBrokers);
+  // Group brokers by cluster
+  const byCluster = {};
+  brokers.forEach(b => { (byCluster[b.clusterId] = byCluster[b.clusterId] || []).push(b); });
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._kafkaClusterFilterBar()}
+    <div style="padding:14px;">
+      ${Object.keys(byCluster).map(cid => {
+        const cluster = APM.kafkaClusters.find(c=>c.id===cid);
+        return `<div style="margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span class="cc-type-badge type-badge-kafka">Kafka</span>
+            <strong style="font-size:13px;">${cluster?cluster.name:cid}</strong>
+            <span style="font-size:11px;color:var(--text-3);">v${cluster?cluster.version:'?'}</span>
+            <a class="link" style="margin-left:auto;font-size:11.5px;cursor:pointer;" onclick="APM.openKafkaClusterDetail('${cid}')">集群详情 →</a>
+          </div>
+          <div class="grid-3">
+            ${byCluster[cid].map(b => `<div class="card">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:6px;height:24px;border-radius:3px;background:${b.status==='warn'?'var(--warning)':'var(--success)'};"></div>
+                <strong>broker-${b.id}</strong>
+                ${b.controller ? '<span class="badge purple" style="font-size:10px;">controller</span>' : ''}
+                <span style="margin-left:auto;font-size:11px;color:var(--text-3);">${b.status === 'warn' ? '● 警示' : '● 正常'}</span>
+              </div>
+              <div class="mono" style="font-size:11.5px;color:var(--text-3);margin-top:4px;">${b.host}</div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">
+                <div><div style="font-size:11px;color:var(--text-3);">ISR / leader</div><div style="font-size:18px;font-weight:600;">${b.isr} / ${b.leader}</div></div>
+                <div><div style="font-size:11px;color:var(--text-3);">磁盘</div><div style="font-size:18px;font-weight:600;color:${b.diskPct>80?'var(--danger)':b.diskPct>70?'var(--warning)':'var(--text-1)'};">${b.diskPct}%</div></div>
+              </div>
+              <div class="bar" style="margin-top:8px;height:5px;"><span style="width:${b.diskPct}%;background:${b.diskPct>80?'var(--danger)':b.diskPct>70?'var(--warning)':'var(--accent)'};"></span></div>
+              <div style="display:flex;gap:14px;margin-top:10px;font-size:11.5px;color:var(--text-2);">
+                <span><span style="color:var(--text-3);">net in</span> <strong>${b.netInMB.toFixed(1)} MB/s</strong></span>
+                <span><span style="color:var(--text-3);">net out</span> <strong>${b.netOutMB.toFixed(1)} MB/s</strong></span>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
     </div>
-
-    <div class="card" style="margin-top:14px;">
-      <div class="card-title"><span>分区健康</span><span class="hint">under-replicated / offline / online</span></div>
-      <div style="display:flex;gap:18px;align-items:center;font-size:13px;margin-top:8px;">
-        <div><span style="color:var(--text-3);">Online</span> <strong style="font-size:20px;">${APM.kafkaTopics.reduce((a,b)=>a+b.partitions, 0)}</strong></div>
-        <div><span style="color:var(--text-3);">Under-replicated</span> <strong style="font-size:20px;color:var(--warning);">2</strong></div>
-        <div><span style="color:var(--text-3);">Offline</span> <strong style="font-size:20px;">0</strong></div>
-        <div style="margin-left:auto;font-size:11.5px;color:var(--text-3);">最近一次 ISR 抖动 4 分钟前 · ledger-cdc#3</div>
-      </div>
-    </div>
-  `;
+  </div>`;
 };

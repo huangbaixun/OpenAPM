@@ -3,6 +3,12 @@ APM.topoView = 'service';
 APM.topoMode = 'graph'; // 'graph' | 'matrix'
 APM.topoSelected = 'checkout-service';
 APM.topoZoom = APM.topoZoom || 1.0;
+APM.topoExpand = APM.topoExpand || false; // false=aggregated mid-cluster nodes; true=expanded individual cluster nodes
+APM.toggleTopoExpand = function() {
+  APM.topoExpand = !APM.topoExpand;
+  APM.renderPage();
+  APM.toast(APM.topoExpand ? '已展开多集群节点' : '已折叠为聚合节点', 'info');
+};
 APM.zoomTopo = function(delta) {
   const next = Math.max(0.4, Math.min(2.5, +(APM.topoZoom * (delta > 0 ? 1.25 : 0.8)).toFixed(2)));
   APM.topoZoom = next;
@@ -46,6 +52,8 @@ APM.renderTopology = function() {
         <button class="tbtn" onclick="APM.zoomTopo(1)" title="放大">⊕ 放大</button>
         <button class="tbtn" onclick="APM.zoomTopo(-1)" title="缩小">⊖ 缩小</button>
         <button class="tbtn" onclick="APM.fitTopo()" title="自适应">⊡ ${(APM.topoZoom*100).toFixed(0)}%</button>
+        <div class="sep"></div>
+        <button class="tbtn ${APM.topoExpand?'active':''}" onclick="APM.toggleTopoExpand()" title="展开/聚合多集群节点">${APM.topoExpand?'▼':'▶'} ${APM.topoExpand?'展开':'聚合'}</button>
       </div>
       <div class="topo-legend">
         <span class="chip"><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:50%;margin-right:6px;"></span>健康</span>
@@ -92,8 +100,8 @@ APM.topoSvg = function() {
     const h = APM.health(s);
     return { rpm: s.rpm, p99: s.p99, err: s.errPct, color: APM.healthColor(h), health: h };
   };
-  // node positions
-  const nodes = [
+  // node positions — service nodes always present; right-side cluster nodes either aggregated or expanded
+  const baseNodes = [
     { id: 'client', x: 80, y: 290, label: '客户端', kind: 'client', color: 'var(--text-3)' },
     { id: 'gateway', x: 230, y: 290, label: 'gateway', kind: 'service', ...liveStats('gateway') },
     { id: 'checkout-service', x: 430, y: 200, label: 'checkout-service', kind: 'service', ...liveStats('checkout-service') },
@@ -101,28 +109,75 @@ APM.topoSvg = function() {
     { id: 'risk-service', x: 640, y: 120, label: 'risk-service', kind: 'service', ...liveStats('risk-service') },
     { id: 'payment-service', x: 640, y: 250, label: 'payment-service', kind: 'service', ...liveStats('payment-service') },
     { id: 'ledger-service', x: 640, y: 400, label: 'ledger-service', kind: 'service', ...liveStats('ledger-service') },
-    { id: 'mysql', x: 880, y: 200, label: 'mysql · order_db', kind: 'database', color: '#ffcc00' },
-    { id: 'redis', x: 880, y: 320, label: 'redis · cache', kind: 'cache', color: '#dc382d' },
-    { id: 'stripe', x: 880, y: 80, label: 'api.stripe.com', kind: 'external', color: 'var(--purple)' },
-    { id: 'kafka', x: 880, y: 440, label: 'kafka · events', kind: 'mq', color: '#231f20' }
+    { id: 'stripe', x: 880, y: 60, label: 'api.stripe.com', kind: 'external', color: 'var(--purple)' }
   ];
+  // Right-side cluster column. Aggregated mode: 3 nodes. Expanded: per-cluster.
+  let clusterNodes;
+  if (!APM.topoExpand) {
+    clusterNodes = [
+      { id: 'agg:db',    x: 880, y: 180, label: 'MySQL/PG/TiDB', kind: 'db-agg',    color: '#0071e3', count: APM.dbClusters.length },
+      { id: 'agg:redis', x: 880, y: 300, label: 'Redis 集群',    kind: 'redis-agg', color: '#dc382d', count: APM.redisClusters.length },
+      { id: 'agg:kafka', x: 880, y: 440, label: 'Kafka 集群',    kind: 'kafka-agg', color: '#231f20', count: APM.kafkaClusters.length }
+    ];
+  } else {
+    // Layout per-cluster nodes in 2 right-side columns to fit (each box is 108px wide)
+    const colA_x = 800, colB_x = 920;
+    clusterNodes = [];
+    APM.dbClusters.forEach((c,i) => {
+      clusterNodes.push({ id:'cluster:'+c.id, x: colA_x, y: 90 + i*72, label: c.name, kind:'db-cluster', dbType: c.type, clusterId: c.id, color:'#0071e3' });
+    });
+    APM.redisClusters.forEach((c,i) => {
+      clusterNodes.push({ id:'cluster:'+c.id, x: colB_x, y: 90 + i*72, label: c.name, kind:'redis-cluster', clusterId: c.id, color:'#dc382d' });
+    });
+    APM.kafkaClusters.forEach((c,i) => {
+      clusterNodes.push({ id:'cluster:'+c.id, x: colB_x, y: 90 + (3+i)*72, label: c.name, kind:'kafka-cluster', clusterId: c.id, color:'#374151' });
+    });
+  }
+  const nodes = baseNodes.concat(clusterNodes);
   // Edges with auto-inferred err from current upstream/downstream health.
   const isErrSvc = id => { const s = live(id); return s ? APM.health(s) === 'err' : false; };
-  const edges = [
+  // Service-to-service edges (always)
+  const svcEdges = [
     { from:'client', to:'gateway', w: 4 },
     { from:'gateway', to:'checkout-service', w: 3 },
     { from:'gateway', to:'order-service', w: 2 },
     { from:'checkout-service', to:'risk-service', w: 2 },
     { from:'checkout-service', to:'payment-service', w: 2 },
     { from:'checkout-service', to:'ledger-service', w: 2 },
-    { from:'order-service', to:'mysql', w: 2 },
-    { from:'risk-service', to:'redis', w: 1 },
-    { from:'risk-service', to:'mysql', w: 1 },
     { from:'payment-service', to:'stripe', w: 2 },
-    { from:'payment-service', to:'ledger-service', w: 1 },
-    { from:'ledger-service', to:'mysql', w: 2 },
-    { from:'order-service', to:'kafka', w: 1 }
-  ].map(e => ({ ...e, err: isErrSvc(e.from) || isErrSvc(e.to) }));
+    { from:'payment-service', to:'ledger-service', w: 1 }
+  ];
+  // Cluster edges depend on expand mode
+  let infraEdges;
+  if (!APM.topoExpand) {
+    infraEdges = [
+      { from:'order-service', to:'agg:db', w: 2 },
+      { from:'risk-service', to:'agg:db', w: 1 },
+      { from:'risk-service', to:'agg:redis', w: 1 },
+      { from:'ledger-service', to:'agg:db', w: 2 },
+      { from:'gateway', to:'agg:redis', w: 2 },
+      { from:'order-service', to:'agg:kafka', w: 1 },
+      { from:'ledger-service', to:'agg:kafka', w: 2 }
+    ];
+  } else {
+    // Derive from connectionPools / redisOps / kafkaProducers per service
+    infraEdges = [];
+    const seen = new Set();
+    const addEdge = (svc, cid, w) => {
+      const key = svc+'->'+cid;
+      if (seen.has(key)) return;
+      seen.add(key);
+      infraEdges.push({ from: svc, to: 'cluster:'+cid, w });
+    };
+    APM.connectionPools.forEach(p => addEdge(p.svc, p.clusterId, 2));
+    APM.redisOps.forEach(o => addEdge(o.svc, o.clusterId, 1));
+    APM.kafkaProducers.forEach(p => addEdge(p.svc, p.clusterId, 1));
+    APM.kafkaConsumers.forEach(c => addEdge(c.svc, c.clusterId, 1));
+    // Filter edges to only services that actually exist as nodes
+    const nodeIds = new Set(nodes.map(n=>n.id));
+    infraEdges = infraEdges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to));
+  }
+  const edges = svcEdges.concat(infraEdges).map(e => ({ ...e, err: isErrSvc(e.from) || isErrSvc(e.to) }));
   const findNode = id => nodes.find(n => n.id === id);
   const z = APM.topoZoom || 1.0;
   const vw = 1000 / z, vh = 580 / z;
@@ -150,16 +205,54 @@ APM.topoSvg = function() {
       if (n.kind === 'client') {
         return `<g><circle cx="${n.x}" cy="${n.y}" r="22" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5"/><text x="${n.x}" y="${n.y+5}" text-anchor="middle" font-size="11" fill="var(--text-2)">${n.label}</text></g>`;
       }
+      // Aggregated cluster types
+      if (n.kind === 'db-agg') {
+        return `<g style="cursor:pointer;" onclick="APM.go('database')">
+          <rect x="${n.x-58}" y="${n.y-22}" width="116" height="44" rx="8" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="${n.x}" y="${n.y-3}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-1)">${n.label}</text>
+          <text x="${n.x}" y="${n.y+11}" text-anchor="middle" font-size="9.5" fill="var(--text-3)" font-family="SF Mono">${n.count} 集群 · 点击展开</text>
+        </g>`;
+      }
+      if (n.kind === 'redis-agg') {
+        return `<g style="cursor:pointer;" onclick="APM.go('redis')">
+          <rect x="${n.x-58}" y="${n.y-22}" width="116" height="44" rx="8" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="${n.x}" y="${n.y-3}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-1)">${n.label}</text>
+          <text x="${n.x}" y="${n.y+11}" text-anchor="middle" font-size="9.5" fill="var(--text-3)" font-family="SF Mono">${n.count} 集群 · 点击展开</text>
+        </g>`;
+      }
+      if (n.kind === 'kafka-agg') {
+        return `<g style="cursor:pointer;" onclick="APM.go('kafka')">
+          <rect x="${n.x-58}" y="${n.y-22}" width="116" height="44" rx="8" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="${n.x}" y="${n.y-3}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-1)">${n.label}</text>
+          <text x="${n.x}" y="${n.y+11}" text-anchor="middle" font-size="9.5" fill="var(--text-3)" font-family="SF Mono">${n.count} 集群 · 点击展开</text>
+        </g>`;
+      }
+      // Expanded individual cluster nodes
+      if (n.kind === 'db-cluster') {
+        const meta = APM.dbTypeMeta[n.dbType] || { label: n.dbType };
+        return `<g style="cursor:pointer;" onclick="APM.openDbClusterDetail('${n.clusterId}')">
+          <rect x="${n.x-54}" y="${n.y-16}" width="108" height="32" rx="6" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.4"/>
+          <text x="${n.x-46}" y="${n.y+4}" text-anchor="start" font-size="10" font-weight="600" fill="${n.color}">${meta.label}</text>
+          <text x="${n.x+44}" y="${n.y+4}" text-anchor="end" font-size="10.5" fill="var(--text-1)">${n.label}</text>
+        </g>`;
+      }
+      if (n.kind === 'redis-cluster') {
+        return `<g style="cursor:pointer;" onclick="APM.openRedisClusterDetail('${n.clusterId}')">
+          <rect x="${n.x-54}" y="${n.y-16}" width="108" height="32" rx="6" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.4"/>
+          <text x="${n.x-46}" y="${n.y+4}" text-anchor="start" font-size="10" font-weight="600" fill="${n.color}">⚡ Redis</text>
+          <text x="${n.x+44}" y="${n.y+4}" text-anchor="end" font-size="10.5" fill="var(--text-1)">${n.label}</text>
+        </g>`;
+      }
+      if (n.kind === 'kafka-cluster') {
+        return `<g style="cursor:pointer;" onclick="APM.openKafkaClusterDetail('${n.clusterId}')">
+          <rect x="${n.x-54}" y="${n.y-16}" width="108" height="32" rx="6" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.4"/>
+          <text x="${n.x-46}" y="${n.y+4}" text-anchor="start" font-size="10" font-weight="600" fill="${n.color}">⊞ Kafka</text>
+          <text x="${n.x+44}" y="${n.y+4}" text-anchor="end" font-size="10.5" fill="var(--text-1)">${n.label}</text>
+        </g>`;
+      }
       if (n.kind !== 'service') {
-        // kafka node → drill into Kafka page; mysql/redis/external → toast (out of scope)
-        const click = n.kind === 'mq'
-          ? `APM.go('kafka')`
-          : n.kind === 'database'
-            ? `APM.go('database')`
-            : n.kind === 'cache'
-              ? `APM.go('database');APM.dbTab='redis'`
-              : `APM.toast('外部依赖 ${n.label}','info')`;
-        return `<g style="cursor:pointer;" onclick="${click}"><rect x="${n.x-46}" y="${n.y-20}" width="92" height="40" rx="8" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5"/><text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-1)">${n.label}</text></g>`;
+        // external endpoint
+        return `<g style="cursor:pointer;" onclick="APM.toast('外部依赖 ${n.label}','info')"><rect x="${n.x-46}" y="${n.y-20}" width="92" height="40" rx="8" fill="var(--bg-elev-2)" stroke="${n.color}" stroke-width="1.5"/><text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-1)">${n.label}</text></g>`;
       }
       const isSel = n.id === APM.topoSelected;
       return `<g style="cursor:pointer;" onclick="APM.selectTopoNode('${n.id}')">

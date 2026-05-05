@@ -412,6 +412,105 @@ textarea.form-input { resize: vertical; min-height: 60px; font-family: var(--mon
 .menu-item:hover { background: var(--bg-hover); }
 .menu-item.danger { color: var(--danger); }
 
+/* ============ Cluster cards (DB / Redis / Kafka multi-cluster overview) ============ */
+.cluster-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.cluster-card {
+  position: relative;
+  background: var(--bg-elev-0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s, transform .12s;
+}
+.cluster-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.cluster-card .cc-head { display:flex; align-items:flex-start; justify-content: space-between; gap:10px; margin-bottom: 10px; }
+.cluster-card .cc-name { font-size: 14px; font-weight: 600; color: var(--text-1); letter-spacing: -0.01em; }
+.cluster-card .cc-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; font-family: var(--mono); }
+.cluster-card .cc-type-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size: 10.5px; font-weight: 600;
+  padding: 2px 7px; border-radius: 5px;
+  letter-spacing: 0.02em;
+}
+.cluster-card .cc-status {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 6px;
+}
+.cluster-card .cc-status.ok { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); }
+.cluster-card .cc-status.warn { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent); }
+.cluster-card .cc-status.err { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); animation: pulseStatus 1.6s infinite; }
+@keyframes pulseStatus { 0%,100%{box-shadow:0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);} 50%{box-shadow:0 0 0 6px color-mix(in srgb, var(--danger) 8%, transparent);} }
+.cluster-card .cc-kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 6px 0 10px; }
+.cluster-card .cc-kpi { display:flex; flex-direction: column; gap: 2px; }
+.cluster-card .cc-kpi .lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.cluster-card .cc-kpi .val { font-size: 15px; font-weight: 600; color: var(--text-1); font-family: var(--mono); letter-spacing: -0.01em; }
+.cluster-card .cc-kpi .val.warn { color: var(--warning); }
+.cluster-card .cc-kpi .val.err { color: var(--danger); }
+.cluster-card .cc-bar {
+  height: 4px; background: var(--bg-elev-2); border-radius: 2px; overflow: hidden; margin: 4px 0;
+}
+.cluster-card .cc-bar > span { display:block; height:100%; background: var(--accent); border-radius: 2px; }
+.cluster-card .cc-bar > span.warn { background: var(--warning); }
+.cluster-card .cc-bar > span.err { background: var(--danger); }
+.cluster-card .cc-spark { height: 28px; margin-top: 2px; }
+.cluster-card .cc-foot {
+  display:flex; align-items:center; gap:6px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-3); margin-top: 8px;
+  padding-top: 8px; border-top: 1px dashed var(--border);
+}
+.cluster-card .cc-foot .chip { font-size: 10.5px; padding: 1px 7px; }
+
+/* Type badges */
+.type-badge-mysql    { color: #00758f; background: color-mix(in srgb, #00758f 14%, transparent); }
+.type-badge-postgres { color: #336791; background: color-mix(in srgb, #336791 14%, transparent); }
+.type-badge-tidb     { color: #d97706; background: color-mix(in srgb, #d97706 14%, transparent); }
+.type-badge-redis    { color: #dc382d; background: color-mix(in srgb, #dc382d 14%, transparent); }
+.type-badge-kafka    { color: #1f2937; background: color-mix(in srgb, #1f2937 12%, transparent); }
+:root[data-theme="dark"] .type-badge-kafka { color: #e5e7eb; background: color-mix(in srgb, #e5e7eb 14%, transparent); }
+
+/* Cluster filter chip bar (horizontal scroll if overflow) */
+.cluster-filter-bar {
+  display:flex; align-items:center; gap: 6px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg-elev-1);
+  overflow-x: auto; scrollbar-width: thin;
+  white-space: nowrap;
+}
+.cluster-filter-bar .lbl { font-size: 11px; color: var(--text-3); font-weight: 600; margin-right: 4px; flex-shrink: 0; }
+.cluster-filter-bar .cf-chip {
+  display:inline-flex; align-items:center; gap:5px; flex-shrink: 0;
+  padding: 4px 10px; border-radius: 7px;
+  font-size: 12px; color: var(--text-2);
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.cluster-filter-bar .cf-chip:hover { background: var(--bg-hover); color: var(--text-1); }
+.cluster-filter-bar .cf-chip.active {
+  background: var(--accent-weak); border-color: var(--accent);
+  color: var(--accent); font-weight: 600;
+}
+.cluster-filter-bar .cf-chip .dot { width:6px; height:6px; border-radius:50%; }
+
+/* Compact cluster summary card row used inside service detail / drawer */
+.cluster-summary-row { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.cluster-summary-card {
+  display:flex; align-items:center; gap:10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg-elev-1); border: 1px solid var(--border);
+  cursor: pointer; transition: border-color .12s, background .12s;
+}
+.cluster-summary-card:hover { border-color: var(--accent); background: var(--bg-hover); }
+.cluster-summary-card .ico {
+  width:32px; height:32px; flex-shrink:0; border-radius: 8px;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size: 16px;
+}
+.cluster-summary-card .body { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.cluster-summary-card .name { font-size: 12.5px; font-weight: 600; color: var(--text-1); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cluster-summary-card .stat { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
 /* ============ Pill button danger variant ============ */
 .pill.danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
 .pill.danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }

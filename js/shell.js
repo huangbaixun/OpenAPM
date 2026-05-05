@@ -40,6 +40,7 @@ APM.navItems = [
   { group: '分析 ANALYZE', items: [
     { id: 'topology', label: '拓扑 Topology', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M9 6h6M7.5 8.5L10 15.5M16.5 8.5L14 15.5"/></svg>' },
     { id: 'database', label: '数据库 DB Calls', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' },
+    { id: 'redis', label: 'Redis 缓存', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6c0-1.5 4-3 9-3s9 1.5 9 3-4 3-9 3-9-1.5-9-3z"/><path d="M3 12c0 1.5 4 3 9 3s9-1.5 9-3"/><path d="M3 6v12c0 1.5 4 3 9 3s9-1.5 9-3V6"/><polyline points="8 9 12 11 16 9"/></svg>' },
     { id: 'kafka', label: 'Kafka 消息', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7l3.4 9M15.8 7l-3.4 9"/></svg>', badge: 'NEW' },
     { id: 'llm', label: 'LLM / GenAI', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4v0a4 4 0 014 4v2a4 4 0 01-4 4h0v0a4 4 0 01-4 4 4 4 0 01-4-4v0h0a4 4 0 01-4-4v-2a4 4 0 014-4v0a4 4 0 014-4z"/><path d="M9 11h.01M15 11h.01M9 15c.83.67 1.83 1 3 1s2.17-.33 3-1"/></svg>', badge: 'NEW' }
   ]},
@@ -186,6 +187,7 @@ APM.renderPage = function() {
     dashboards: APM.renderDashboards,
     onboarding: APM.renderOnboarding,
     database: APM.renderDatabase,
+    redis: APM.renderRedis,
     kafka: APM.renderKafka,
     llm: APM.renderLLM,
     settings: APM.renderSettings

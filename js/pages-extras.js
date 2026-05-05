@@ -203,77 +203,184 @@ APM.openPanelMenu = function(ev, panelName) {
   });
 };
 
-// ---------- Database: replace with multi-subtab ----------
-APM.dbTab = APM.dbTab || 'slow';
-APM.dbDataSource = APM.dbDataSource || 'all';
-APM.dbType = APM.dbType || 'sql';
-APM._dbDataSources = ['all','mysql-main','mysql-ledger','pg-risk','redis-cache'];
-APM._dbDataSourceLabels = {'all':'全部','mysql-main':'mysql · order_db','mysql-ledger':'mysql · ledger_db','pg-risk':'pg · risk_db','redis-cache':'redis · cache'};
-APM._dbTypes = ['sql','redis','all'];
-APM._dbTypeLabels = { sql:'SQL', redis:'Redis', all:'全部' };
-APM.cycleDbDataSource = function() {
-  APM.dbDataSource = APM._dbDataSources[(APM._dbDataSources.indexOf(APM.dbDataSource)+1) % APM._dbDataSources.length];
-  APM.renderPage();
-  APM.toast('数据源 → ' + APM._dbDataSourceLabels[APM.dbDataSource], 'info');
-};
-APM.cycleDbType = function() {
-  APM.dbType = APM._dbTypes[(APM._dbTypes.indexOf(APM.dbType)+1) % APM._dbTypes.length];
-  if (APM.dbType === 'redis') APM.dbTab = 'redis';
-  else if (APM.dbType === 'sql' && APM.dbTab === 'redis') APM.dbTab = 'slow';
-  APM.renderPage();
-  APM.toast('类型 → ' + APM._dbTypeLabels[APM.dbType], 'info');
-};
+// ---------- Database: cluster-aware multi-subtab ----------
+APM.dbTab = APM.dbTab || 'clusters';
+APM.dbClusterFilter = APM.dbClusterFilter || 'all';
+APM.dbTypeFilter = APM.dbTypeFilter || 'all'; // all | mysql | postgres | tidb
+APM.dbSetTab = function(t) { APM.dbTab = t; APM.renderPage(); };
+APM.dbSetClusterFilter = function(id) { APM.dbClusterFilter = id; APM.renderPage(); };
+APM.dbSetTypeFilter = function(t) { APM.dbTypeFilter = t; APM.dbClusterFilter = 'all'; APM.renderPage(); };
 APM._renderDatabaseOrig = APM.renderDatabase;
+
+APM._dbCardKpiBar = function(used, max, color) {
+  const pct = Math.min(100, (used / max) * 100);
+  return `<div class="cc-bar"><span class="${color}" style="width:${pct.toFixed(1)}%;"></span></div>`;
+};
+APM._dbStatusClass = function(c) {
+  if (c.errPct > 0.1 || c.connUsed/c.connMax > 0.9) return 'warn';
+  if (c.status === 'warn') return 'warn';
+  if (c.status === 'err') return 'err';
+  return 'ok';
+};
+
+APM.dbClustersTab = function() {
+  const list = APM.dbTypeFilter === 'all'
+    ? APM.dbClusters
+    : APM.dbClusters.filter(c => c.type === APM.dbTypeFilter);
+  const types = ['all','mysql','postgres','tidb'];
+  return `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="cluster-filter-bar">
+        <span class="lbl">类型</span>
+        ${types.map(t => `<div class="cf-chip ${APM.dbTypeFilter===t?'active':''}" onclick="APM.dbSetTypeFilter('${t}')">${t==='all'?'全部':APM.dbTypeMeta[t].label}</div>`).join('')}
+        <span style="margin-left:auto;font-size:11px;color:var(--text-3);">共 ${list.length} 个集群</span>
+      </div>
+      <div style="padding:14px;">
+        ${list.length === 0 ? '<div class="placeholder"><div class="icon">🗄️</div>无匹配集群</div>' : `<div class="cluster-grid">
+          ${list.map(c => {
+            const meta = APM.dbTypeMeta[c.type] || { label:c.type, color:'var(--text-2)' };
+            const usePct = (c.connUsed / c.connMax * 100).toFixed(0);
+            const usePctColor = usePct > 90 ? 'err' : usePct > 70 ? 'warn' : '';
+            const statusCls = APM._dbStatusClass(c);
+            return `<div class="cluster-card" onclick="APM.openDbClusterDetail('${c.id}')">
+              <div class="cc-head">
+                <div style="min-width:0;">
+                  <div class="cc-name">${c.name}</div>
+                  <div class="cc-meta">${c.host} · ${c.mode}</div>
+                </div>
+                <span class="cc-type-badge type-badge-${c.type}">${meta.icon||''} ${meta.label}</span>
+                <div class="cc-status ${statusCls}" title="${statusCls}"></div>
+              </div>
+              <div class="cc-kpis">
+                <div class="cc-kpi"><span class="lbl">QPS</span><span class="val">${c.qps.toLocaleString()}</span></div>
+                <div class="cc-kpi"><span class="lbl">P99</span><span class="val ${c.p99>50?'warn':''}">${c.p99}ms</span></div>
+                <div class="cc-kpi"><span class="lbl">Err%</span><span class="val ${c.errPct>0.1?'err':''}">${c.errPct.toFixed(2)}</span></div>
+                <div class="cc-kpi"><span class="lbl">Conn</span><span class="val ${usePctColor}">${c.connUsed}/${c.connMax}</span></div>
+              </div>
+              ${APM._dbCardKpiBar(c.connUsed, c.connMax, usePctColor)}
+              <div class="cc-spark">${APM.sparkline(c.spark, '#0071e3', 240, 28)}</div>
+              <div class="cc-foot">
+                <span>v${c.version}</span><span>·</span>
+                <span>${c.sizeGB} GB · ${c.tables} 表</span>
+                <span style="margin-left:auto;">使用方 ${c.serviceUsers.length}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`}
+      </div>
+    </div>
+  `;
+};
+
+APM.openDbClusterDetail = function(id) {
+  const c = APM.dbClusters.find(x => x.id === id);
+  if (!c) return;
+  const meta = APM.dbTypeMeta[c.type] || { label:c.type };
+  const slow = APM.slowQueries.filter(q => q.clusterId === id);
+  const n1 = APM.nplusOne.filter(q => q.clusterId === id);
+  const pools = APM.connectionPools.filter(p => p.clusterId === id);
+  const tx = APM.transactions.filter(t => t.clusterId === id);
+  APM.openModal({
+    title: `${c.name} · ${meta.label} 集群详情`,
+    width: 860,
+    body: `
+      <div class="grid-4" style="margin-bottom:14px;">
+        <div class="card kpi"><div class="name">QPS</div><div class="value">${c.qps.toLocaleString()}</div></div>
+        <div class="card kpi"><div class="name">P99</div><div class="value">${c.p99}<span class="unit">ms</span></div></div>
+        <div class="card kpi"><div class="name">连接</div><div class="value">${c.connUsed}/${c.connMax}</div></div>
+        <div class="card kpi"><div class="name">数据量</div><div class="value">${c.sizeGB}<span class="unit">GB</span></div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:10px;line-height:1.7;">
+        <div><strong>主机</strong> <span class="mono">${c.host}</span></div>
+        <div><strong>拓扑</strong> ${c.mode} · ${meta.label} v${c.version}</div>
+        <div><strong>区域</strong> ${c.region}</div>
+        <div><strong>使用服务</strong> ${c.serviceUsers.map(s=>`<a class="link" onclick="APM.go('service',{id:'${s}'})">${s}</a>`).join(' · ')}</div>
+      </div>
+      ${slow.length ? `<div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">Top 慢查询</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>SQL 模板</th><th style="width:100px;">服务</th><th style="width:80px;">P99</th><th style="width:80px;">次数</th></tr></thead>
+        <tbody>${slow.slice(0,5).map(q=>`<tr><td><pre class="mono" style="margin:0;font-size:11.5px;white-space:pre-wrap;">${q.sql.length>120?q.sql.slice(0,120)+'…':q.sql}</pre></td><td>${q.svc}</td><td class="mono ${q.p99>500?'err':''}">${q.p99}ms</td><td class="mono">${q.count.toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table></div>` : ''}
+      ${pools.length ? `<div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">连接池</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>服务</th><th>类型</th><th>Active</th><th>Idle</th><th>Pending</th><th>Max</th></tr></thead>
+        <tbody>${pools.map(p=>`<tr><td>${p.svc}</td><td class="mono">${p.pool}</td><td class="mono">${p.active}</td><td class="mono">${p.idle}</td><td class="mono ${p.pending>0?'err':''}">${p.pending}</td><td class="mono">${p.max}</td></tr>`).join('')}</tbody>
+      </table></div>` : ''}
+      ${n1.length ? `<div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">N+1 嫌疑 (${n1.length})</div>
+      <div style="font-size:12px;color:var(--text-2);">${n1.map(q=>`<div style="margin:4px 0;"><span class="badge warn">${q.mult}</span> ${q.svc} · <code>${q.parent.slice(0,70)}…</code></div>`).join('')}</div>` : ''}
+    `,
+    footer: `<button class="pill" data-act="close">关闭</button><button class="pill primary" data-act="traces">查看 trace</button>`
+  }).el.addEventListener('click', (ev) => {
+    const act = ev.target.dataset.act; if (!act) return;
+    APM.closeModal(ev.currentTarget.id);
+    if (act === 'traces') APM.go('traces', { clusterId: id });
+  });
+};
+
+APM._dbClusterFilterBar = function(restrictType) {
+  // restrictType: optional 'mysql'|'postgres'|'tidb' to scope the chip list
+  const all = restrictType ? APM.dbClusters.filter(c => c.type === restrictType) : APM.dbClusters;
+  return `<div class="cluster-filter-bar">
+    <span class="lbl">集群</span>
+    <div class="cf-chip ${APM.dbClusterFilter==='all'?'active':''}" onclick="APM.dbSetClusterFilter('all')">全部</div>
+    ${all.map(c => `<div class="cf-chip ${APM.dbClusterFilter===c.id?'active':''}" onclick="APM.dbSetClusterFilter('${c.id}')"><span class="dot" style="background:${APM.dbTypeMeta[c.type].color};"></span>${c.name}</div>`).join('')}
+  </div>`;
+};
+
+APM._dbApplyClusterFilter = function(rows) {
+  if (APM.dbClusterFilter === 'all') return rows;
+  return rows.filter(r => r.clusterId === APM.dbClusterFilter);
+};
+
 APM.renderDatabase = function() {
-  const tab = APM.dbTab || 'slow';
-  const ds = APM.dbDataSource;
+  const tab = APM.dbTab;
+  const totalQps = APM.dbClusters.reduce((a,b)=>a+b.qps, 0);
+  const slowCnt = APM.slowQueries.filter(q=>q.p99>500).length;
+  const poolWait = APM.connectionPools.filter(p=>p.pending>0).length;
   return `
     <div class="between">
       <div>
         <div class="page-title">数据库调用 DB Calls</div>
-        <div class="page-sub">SQL 模板聚合 · 最近 1 小时 · ${ds === 'all' ? 'MySQL / PostgreSQL / Redis' : APM._dbDataSourceLabels[ds]}</div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button class="pill" onclick="APM.cycleDbDataSource()">数据源: ${APM._dbDataSourceLabels[ds]}</button>
-        <button class="pill" onclick="APM.cycleDbType()">类型: ${APM._dbTypeLabels[APM.dbType]}</button>
+        <div class="page-sub">${APM.dbClusters.length} 个集群 · MySQL / PostgreSQL / TiDB · 多集群可观测</div>
       </div>
     </div>
     <div class="grid-4" style="margin-top:14px;">
-      <div class="card kpi"><div class="name">SQL 模板</div><div class="value">${APM.slowQueries.length}<span class="unit"> 个</span></div><div class="delta flat">N+1 嫌疑 1 个</div></div>
-      <div class="card kpi"><div class="name">总执行</div><div class="value">${APM.slowQueries.reduce((a,b)=>a+b.count,0).toLocaleString()}</div><div class="delta up">▲ 8%</div></div>
-      <div class="card kpi"><div class="name">慢查询 (>500ms)</div><div class="value" style="color:var(--warning);">2</div><div class="delta flat">order, risk</div></div>
-      <div class="card kpi"><div class="name">连接池等待</div><div class="value" style="color:var(--danger);">4<span class="unit"> req</span></div><div class="delta up">checkout HikariCP</div></div>
+      <div class="card kpi"><div class="name">集群数</div><div class="value">${APM.dbClusters.length}</div><div class="delta flat">3 类型</div></div>
+      <div class="card kpi"><div class="name">总 QPS</div><div class="value">${(totalQps/1000).toFixed(1)}<span class="unit">K</span></div><div class="delta up">▲ 6%</div></div>
+      <div class="card kpi"><div class="name">慢查询 (&gt;500ms)</div><div class="value" style="color:var(--warning);">${slowCnt}</div><div class="delta flat">across clusters</div></div>
+      <div class="card kpi"><div class="name">连接池等待</div><div class="value" style="color:${poolWait?'var(--danger)':'inherit'};">${poolWait}<span class="unit"> svc</span></div><div class="delta flat">${poolWait?'checkout, ledger, reconcile':'—'}</div></div>
     </div>
     <div class="subtabs">
-      ${[['slow','慢查询', APM.slowQueries.length],['n1','N+1 嫌疑', 1],['pool','连接池', null],['tx','事务', null],['redis','Redis', null]].map(([id,label,c]) =>
+      ${[['clusters','集群', APM.dbClusters.length],['slow','慢查询', APM.slowQueries.length],['n1','N+1 嫌疑', APM.nplusOne.length],['pool','连接池', APM.connectionPools.length],['tx','事务', APM.transactions.length]].map(([id,label,c]) =>
         `<div class="subtab ${tab===id?'active':''}" onclick="APM.dbSetTab('${id}')">${label}${c?`<span class="pill-mini">${c}</span>`:''}</div>`
       ).join('')}
     </div>
-    ${APM.dbTabBody(tab)}
+    ${tab === 'clusters' ? APM.dbClustersTab() : APM.dbTabBody(tab)}
   `;
 };
-APM.dbSetTab = function(t) { APM.dbTab = t; APM.renderPage(); };
 APM.dbTabBody = function(tab) {
   if (tab === 'slow') return APM.dbSlow();
   if (tab === 'n1') return APM.dbN1();
   if (tab === 'pool') return APM.dbPool();
   if (tab === 'tx') return APM.dbTx();
-  if (tab === 'redis') return APM.dbRedis();
 };
 
 APM.dbSlow = function() {
-  // Filter to current project's services so switching project actually changes the table.
-  const list = APM.slowQueries.filter(q => APM.inProject(q.svc));
+  let list = APM.slowQueries.filter(q => APM.inProject(q.svc));
+  list = APM._dbApplyClusterFilter(list);
   return `<div class="card" style="padding:0;overflow:hidden;">
-    ${list.length === 0 ? `<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>当前项目暂无慢查询样本</div>` : `<table class="tbl">
+    ${APM._dbClusterFilterBar()}
+    ${list.length === 0 ? `<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>当前过滤下暂无慢查询样本</div>` : `<table class="tbl">
       <thead><tr>
-        <th style="width:42%;">SQL 模板</th><th style="width:140px;">服务</th><th style="width:80px;">次数</th><th style="width:80px;">avg</th><th style="width:80px;">P99</th><th style="width:80px;">行数</th><th style="width:140px;text-align:right;">操作</th>
+        <th style="width:36%;">SQL 模板</th><th style="width:120px;">集群</th><th style="width:120px;">服务</th><th style="width:70px;">次数</th><th style="width:60px;">avg</th><th style="width:60px;">P99</th><th style="width:60px;">行数</th><th style="width:140px;text-align:right;">操作</th>
       </tr></thead>
       <tbody>
         ${list.map((q) => {
           const i = APM.slowQueries.indexOf(q);
+          const cluster = APM.dbClusters.find(c=>c.id===q.clusterId);
           return `<tr class="clickable" onclick="APM.openExplain(${i})">
           <td><pre class="mono" style="margin:0;font-size:12px;color:var(--text-1);white-space:pre-wrap;line-height:1.5;">${q.sql}</pre></td>
+          <td>${cluster ? `<a class="link" onclick="event.stopPropagation();APM.openDbClusterDetail('${cluster.id}')"><span class="cc-type-badge type-badge-${cluster.type}" style="padding:1px 6px;font-size:10px;">${APM.dbTypeMeta[cluster.type].label}</span> ${cluster.name}</a>` : '—'}</td>
           <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${q.svc}'})">${q.svc}</a></td>
           <td class="mono">${q.count.toLocaleString()}</td>
           <td class="mono">${q.avg}<span style="color:var(--text-3);">ms</span></td>
@@ -351,98 +458,89 @@ APM.explainDrawer = function() {
 };
 
 APM.dbN1 = function() {
-  return `<div class="banner warn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-  <div class="grow"><strong>检测到 1 个 N+1 查询模式</strong> · 建议使用 IN 批量查询或 JOIN 优化</div></div>
-  <div class="card" style="padding:0;overflow:hidden;margin-top:14px;">
-    <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span class="badge err">N+1</span>
-        <strong style="font-size:14px;">order-service · GET /orders/:id 详情接口</strong>
-        <span style="margin-left:auto;font-size:11.5px;color:var(--text-3);font-family:var(--mono);">最近 1h · 1,420 次发生</span>
-      </div>
-      <div style="margin-top:6px;font-size:12px;color:var(--text-2);">每个订单详情查询会触发 <strong>1 + N 次</strong> SQL — 1 次查订单，N 次按 item_id 单条查 product。平均 N=8。</div>
-    </div>
-    <div style="padding:14px 16px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div>
-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">当前模式 (8.4 次/请求)</div>
-          <pre class="code-block" style="font-size:11.5px;">-- 1 次
-SELECT * FROM orders WHERE id = ?
-
--- N 次 (×8)
-SELECT * FROM products WHERE id = ?
-SELECT * FROM products WHERE id = ?
-SELECT * FROM products WHERE id = ?
-…</pre>
+  let list = APM.nplusOne.filter(q => APM.inProject(q.svc));
+  list = APM._dbApplyClusterFilter(list);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._dbClusterFilterBar()}
+    ${list.length === 0 ? `<div class="placeholder" style="margin:24px;"><div class="icon">🔍</div>当前过滤下未检测到 N+1</div>` :
+    list.map(q => {
+      const cluster = APM.dbClusters.find(c=>c.id===q.clusterId);
+      return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="badge err">N+1</span>
+          ${cluster ? `<span class="cc-type-badge type-badge-${cluster.type}">${APM.dbTypeMeta[cluster.type].label} · ${cluster.name}</span>` : ''}
+          <strong style="font-size:13.5px;">${q.svc} · 倍数 ${q.mult}</strong>
+          <span style="margin-left:auto;font-size:11.5px;color:var(--text-3);font-family:var(--mono);">${q.traces} traces · 示例 ${q.exampleTrace}</span>
         </div>
-        <div>
-          <div style="font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">建议: 批量 IN 查询</div>
-          <pre class="code-block" style="font-size:11.5px;border:1px dashed var(--success);">SELECT * FROM orders WHERE id = ?
-
-SELECT * FROM products
-WHERE id IN (?, ?, ?, ?, ?, ?, ?, ?)</pre>
+        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">父查询</div>
+            <pre class="code-block" style="font-size:11.5px;">${q.parent}</pre>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--warning);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">子查询 (×${q.mult})</div>
+            <pre class="code-block" style="font-size:11.5px;border-left:2px solid var(--warning);">${q.child}</pre>
+          </div>
         </div>
-      </div>
-      <div style="display:flex;gap:14px;margin-top:14px;font-size:12px;">
-        <div><span style="color:var(--text-3);">SQL 调用</span> <strong style="color:var(--danger);">9 → 2</strong></div>
-        <div><span style="color:var(--text-3);">P99</span> <strong style="color:var(--danger);">320ms → 48ms</strong></div>
-        <div><span style="color:var(--text-3);">DB 负载</span> <strong style="color:var(--success);">-78%</strong></div>
-        <button class="pill primary" style="margin-left:auto;padding:5px 10px;font-size:12px;" onclick="APM.go('traces',{trace:'4f2c9a...b801'})">查看示例 Trace</button>
-      </div>
-    </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.go('traces',{trace:'${q.exampleTrace}'})">查看 Trace</button>
+          ${cluster ? `<button class="pill" style="padding:4px 8px;font-size:11px;" onclick="APM.openDbClusterDetail('${cluster.id}')">集群详情</button>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
   </div>`;
 };
 
 APM.dbPool = function() {
-  return `<div class="grid-4">
-    ${[
-      {name:'checkout · order_db', a:18, i:6, p:2, m:30, color:'var(--warning)'},
-      {name:'order · order_db', a:14, i:8, p:0, m:20, color:'var(--success)'},
-      {name:'risk · risk_db', a:9, i:3, p:0, m:15, color:'var(--success)'},
-      {name:'ledger · ledger_db', a:14, i:1, p:4, m:15, color:'var(--danger)'}
-    ].map(p => `<div class="card">
-      <div style="font-weight:600;font-size:13px;">${p.name}</div>
-      <div style="font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px;">HikariCP · max=${p.m}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;">
-        <div><div style="font-size:10px;color:var(--text-3);">Active</div><div style="font-size:18px;font-weight:700;">${p.a}</div></div>
-        <div><div style="font-size:10px;color:var(--text-3);">Idle</div><div style="font-size:18px;font-weight:700;">${p.i}</div></div>
-        <div><div style="font-size:10px;color:var(--text-3);">Pending</div><div style="font-size:18px;font-weight:700;color:${p.p>0?'var(--danger)':'var(--text-3)'};">${p.p}</div></div>
-        <div><div style="font-size:10px;color:var(--text-3);">Max</div><div style="font-size:18px;font-weight:700;color:var(--text-3);">${p.m}</div></div>
-      </div>
-      <div class="bar" style="margin-top:10px;height:6px;"><span style="width:${(p.a/p.m)*100}%;background:${p.color};"></span></div>
-    </div>`).join('')}
-  </div>
-  <div class="card" style="margin-top:14px;">
-    <div class="card-title"><span>checkout HikariCP · 等待时长 (P95)</span><span class="hint">阈值 50ms</span></div>
-    <svg viewBox="0 0 600 150" width="100%" height="150">
-      <g stroke="var(--grid)"><line x1="0" y1="40" x2="600" y2="40"/><line x1="0" y1="80" x2="600" y2="80"/><line x1="0" y1="120" x2="600" y2="120"/></g>
-      <line x1="0" y1="50" x2="600" y2="50" stroke="var(--danger)" stroke-width="1" stroke-dasharray="3 3"/>
-      <text x="540" y="46" fill="var(--danger)" font-size="10">50ms 阈值</text>
-      <polyline points="${Array.from({length:60},(_,i)=>`${i*10},${110 - (i<40?10:i>50?40+Math.random()*10:i*1.2)}`).join(' ')}" fill="none" stroke="var(--warning)" stroke-width="1.6"/>
-    </svg>
+  let list = APM.connectionPools.filter(p => APM.inProject(p.svc));
+  list = APM._dbApplyClusterFilter(list);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._dbClusterFilterBar()}
+    ${list.length === 0 ? `<div class="placeholder" style="margin:24px;"><div class="icon">🔌</div>暂无连接池</div>` : `<div style="padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">
+      ${list.map(p => {
+        const cluster = APM.dbClusters.find(c=>c.id===p.clusterId);
+        const usePct = (p.active/p.max*100);
+        const barCls = p.pending>0 ? 'err' : (usePct>80 ? 'warn' : '');
+        return `<div class="card" style="padding:12px;cursor:pointer;" onclick="${cluster?`APM.openDbClusterDetail('${cluster.id}')`:''}">
+          <div style="font-weight:600;font-size:13px;">${p.svc}</div>
+          <div style="font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px;">${p.pool} · ${cluster?cluster.name:'—'} · max=${p.max}</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;">
+            <div><div style="font-size:10px;color:var(--text-3);">Active</div><div style="font-size:18px;font-weight:700;">${p.active}</div></div>
+            <div><div style="font-size:10px;color:var(--text-3);">Idle</div><div style="font-size:18px;font-weight:700;">${p.idle}</div></div>
+            <div><div style="font-size:10px;color:var(--text-3);">Pending</div><div style="font-size:18px;font-weight:700;color:${p.pending>0?'var(--danger)':'var(--text-3)'};">${p.pending}</div></div>
+            <div><div style="font-size:10px;color:var(--text-3);">Max</div><div style="font-size:18px;font-weight:700;color:var(--text-3);">${p.max}</div></div>
+          </div>
+          <div class="cc-bar" style="margin-top:10px;"><span class="${barCls}" style="width:${usePct.toFixed(0)}%;"></span></div>
+          ${p.waitMs>0 ? `<div style="margin-top:6px;font-size:11px;color:var(--warning);">P95 等待 ${p.waitMs}ms</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`}
   </div>`;
 };
 
 APM.dbTx = function() {
-  return `<div class="card" style="padding:0;">
-    <table class="tbl">
-      <thead><tr><th style="padding-left:14px;">事务</th><th>服务</th><th>提交</th><th>回滚</th><th>P99 时长</th><th>提交率</th></tr></thead>
+  let list = APM.transactions.filter(t => APM.inProject(t.svc));
+  list = APM._dbApplyClusterFilter(list);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._dbClusterFilterBar()}
+    ${list.length === 0 ? `<div class="placeholder" style="margin:24px;"><div class="icon">⚙️</div>暂无事务样本</div>` : `<table class="tbl">
+      <thead><tr><th style="padding-left:14px;">事务</th><th>服务</th><th>集群</th><th>次数</th><th>avg</th><th>提交率</th><th>回滚率</th></tr></thead>
       <tbody>
-        ${[
-          ['placeOrder','checkout-service',1820,42,820,99.7],
-          ['refundOrder','payment-service',180,8,420,99.6],
-          ['updateInventory','checkout-service',1240,2,140,99.9],
-          ['writeLedger','ledger-service',780,38,608,98.4]
-        ].map(t => `<tr class="clickable" onclick="APM.openTxDetail('${t[0]}','${t[1]}',${t[2]},${t[3]},${t[4]},${t[5]})">
-          <td class="mono" style="padding-left:14px;font-weight:600;">${t[0]}</td>
-          <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${t[1]}'})">${t[1]}</a></td>
-          <td class="mono">${t[2]}</td>
-          <td class="mono" style="color:${t[3]>20?'var(--danger)':t[3]>0?'var(--warning)':'inherit'};">${t[3]}</td>
-          <td class="mono">${t[4]}ms</td>
-          <td><div class="apdex-bar"><span style="width:${t[5]}%;background:${t[5]>99?'var(--success)':'var(--warning)'};"></span></div><span class="mono" style="margin-left:4px;font-size:11px;">${t[5]}%</span></td>
-        </tr>`).join('')}
+        ${list.map(t => {
+          const cluster = APM.dbClusters.find(c=>c.id===t.clusterId);
+          const commitNum = parseFloat(t.commitPct);
+          return `<tr class="clickable" onclick="APM.openTxDetail('${t.name}','${t.svc}',${t.count},${Math.round(t.count*(parseFloat(t.rollbackPct)/100))},${t.avgMs},${commitNum})">
+            <td class="mono" style="padding-left:14px;font-weight:600;">${t.name}</td>
+            <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${t.svc}'})">${t.svc}</a></td>
+            <td>${cluster ? `<a class="link" onclick="event.stopPropagation();APM.openDbClusterDetail('${cluster.id}')"><span class="cc-type-badge type-badge-${cluster.type}" style="padding:1px 6px;font-size:10px;">${APM.dbTypeMeta[cluster.type].label}</span> ${cluster.name}</a>` : '—'}</td>
+            <td class="mono">${t.count.toLocaleString()}</td>
+            <td class="mono">${t.avgMs}ms</td>
+            <td><div class="apdex-bar"><span style="width:${commitNum}%;background:${commitNum>99?'var(--success)':commitNum>95?'var(--warning)':'var(--danger)'};"></span></div><span class="mono" style="margin-left:4px;font-size:11px;">${t.commitPct}</span></td>
+            <td class="mono ${parseFloat(t.rollbackPct)>5?'err':parseFloat(t.rollbackPct)>0?'warn':''}">${t.rollbackPct}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
-    </table>
+    </table>`}
   </div>`;
 };
 
@@ -472,41 +570,225 @@ APM.openTxDetail = function(name, svc, commits, rollbacks, p99, commitPct) {
   });
 };
 
-APM.dbRedis = function() {
-  return `<div class="grid-4">
-    <div class="card kpi"><div class="name">Ops/sec</div><div class="value">12.4<span class="unit">k</span></div><div class="delta up">▲ 4%</div></div>
-    <div class="card kpi"><div class="name">命中率</div><div class="value" style="color:var(--success);">96.8<span class="unit">%</span></div><div class="delta flat">— 稳定</div></div>
-    <div class="card kpi"><div class="name">P99</div><div class="value">3<span class="unit">ms</span></div><div class="delta flat">— 稳定</div></div>
-    <div class="card kpi"><div class="name">连接池等待</div><div class="value" style="color:var(--warning);">4</div><div class="delta up">risk-service</div></div>
-  </div>
-  <div class="grid-2-eq">
-    <div class="card">
-      <div class="card-title"><span>命令分布 (Top)</span><span class="hint">近 1h</span></div>
-      <table class="tbl">
-        <thead><tr><th>命令</th><th>QPS</th><th>P99</th><th>占比</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">GET</td><td class="mono">7,820</td><td class="mono">2ms</td><td><div class="apdex-bar"><span style="width:62%;background:var(--accent);"></span></div></td></tr>
-          <tr><td class="mono">SETEX</td><td class="mono">2,180</td><td class="mono">3ms</td><td><div class="apdex-bar"><span style="width:18%;background:var(--accent);"></span></div></td></tr>
-          <tr><td class="mono">HGETALL</td><td class="mono">1,420</td><td class="mono">4ms</td><td><div class="apdex-bar"><span style="width:11%;background:var(--accent);"></span></div></td></tr>
-          <tr><td class="mono">EXPIRE</td><td class="mono">820</td><td class="mono">1ms</td><td><div class="apdex-bar"><span style="width:7%;background:var(--accent);"></span></div></td></tr>
-          <tr><td class="mono">DEL</td><td class="mono">240</td><td class="mono">2ms</td><td><div class="apdex-bar"><span style="width:2%;background:var(--accent);"></span></div></td></tr>
-        </tbody>
-      </table>
+// ---------- Redis: standalone multi-cluster page ----------
+APM.redisTab = APM.redisTab || 'clusters';
+APM.redisClusterFilter = APM.redisClusterFilter || 'all';
+APM.redisModeFilter = APM.redisModeFilter || 'all';
+APM.redisSetTab = function(t) { APM.redisTab = t; APM.renderPage(); };
+APM.redisSetClusterFilter = function(id) { APM.redisClusterFilter = id; APM.renderPage(); };
+APM.redisSetModeFilter = function(m) { APM.redisModeFilter = m; APM.redisClusterFilter = 'all'; APM.renderPage(); };
+
+APM._redisModeIcon = function(mode) {
+  if (mode === 'cluster') return '⬢';
+  if (mode === 'sentinel') return '◆';
+  return '●';
+};
+APM._redisStatusClass = function(c) {
+  if (c.evictPerSec > 50 || c.memUsedGB/c.memMaxGB > 0.9) return 'warn';
+  if (c.status === 'warn') return 'warn';
+  if (c.status === 'err') return 'err';
+  return 'ok';
+};
+
+APM.redisClustersTab = function() {
+  const list = APM.redisModeFilter === 'all'
+    ? APM.redisClusters
+    : APM.redisClusters.filter(c => c.mode === APM.redisModeFilter);
+  const modes = ['all','cluster','sentinel','standalone'];
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    <div class="cluster-filter-bar">
+      <span class="lbl">部署模式</span>
+      ${modes.map(m => `<div class="cf-chip ${APM.redisModeFilter===m?'active':''}" onclick="APM.redisSetModeFilter('${m}')">${m==='all'?'全部':m}</div>`).join('')}
+      <span style="margin-left:auto;font-size:11px;color:var(--text-3);">共 ${list.length} 个集群</span>
     </div>
-    <div class="card">
-      <div class="card-title"><span>Hot Keys</span><span class="hint">最近 5 分钟</span></div>
-      <table class="tbl">
-        <thead><tr><th>Key 模式</th><th>QPS</th><th>类型</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">user:profile:*</td><td class="mono">3,420</td><td>HASH</td></tr>
-          <tr><td class="mono">cart:*</td><td class="mono">2,180</td><td>HASH</td></tr>
-          <tr><td class="mono">product:detail:*</td><td class="mono">1,840</td><td>STRING</td></tr>
-          <tr><td class="mono">session:*</td><td class="mono">1,240</td><td>STRING</td></tr>
-          <tr><td class="mono">flash:stock:*</td><td class="mono">820</td><td>STRING</td></tr>
-        </tbody>
-      </table>
+    <div style="padding:14px;">
+      ${list.length === 0 ? '<div class="placeholder"><div class="icon">⚡</div>无匹配集群</div>' : `<div class="cluster-grid">
+        ${list.map(c => {
+          const memPct = (c.memUsedGB/c.memMaxGB*100);
+          const memCls = memPct>90 ? 'err' : memPct>75 ? 'warn' : '';
+          const statusCls = APM._redisStatusClass(c);
+          return `<div class="cluster-card" onclick="APM.openRedisClusterDetail('${c.id}')">
+            <div class="cc-head">
+              <div style="min-width:0;">
+                <div class="cc-name">${c.name}</div>
+                <div class="cc-meta">${c.host} · ${APM._redisModeIcon(c.mode)} ${c.mode} (${c.nodes} node${c.nodes>1?'s':''})</div>
+              </div>
+              <span class="cc-type-badge type-badge-redis">⚡ Redis</span>
+              <div class="cc-status ${statusCls}"></div>
+            </div>
+            <div class="cc-kpis">
+              <div class="cc-kpi"><span class="lbl">QPS</span><span class="val">${c.qps.toLocaleString()}</span></div>
+              <div class="cc-kpi"><span class="lbl">P99</span><span class="val">${c.p99Ms}ms</span></div>
+              <div class="cc-kpi"><span class="lbl">命中</span><span class="val ${c.hitPct<90?'warn':''}">${c.hitPct}%</span></div>
+              <div class="cc-kpi"><span class="lbl">驱逐</span><span class="val ${c.evictPerSec>50?'err':c.evictPerSec>0?'warn':''}">${c.evictPerSec}/s</span></div>
+            </div>
+            <div class="cc-bar"><span class="${memCls}" style="width:${memPct.toFixed(1)}%;"></span></div>
+            <div style="font-size:10.5px;color:var(--text-3);font-family:var(--mono);margin-top:2px;">内存 ${c.memUsedGB} / ${c.memMaxGB} GB (${memPct.toFixed(0)}%)</div>
+            <div class="cc-spark">${APM.sparkline(c.spark, '#dc382d', 240, 28)}</div>
+            <div class="cc-foot">
+              <span>v${c.version}</span><span>·</span><span>${c.region}</span>
+              <span style="margin-left:auto;">使用方 ${c.serviceUsers.length}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`}
     </div>
   </div>`;
+};
+
+APM._redisClusterFilterBar = function() {
+  return `<div class="cluster-filter-bar">
+    <span class="lbl">集群</span>
+    <div class="cf-chip ${APM.redisClusterFilter==='all'?'active':''}" onclick="APM.redisSetClusterFilter('all')">全部</div>
+    ${APM.redisClusters.map(c => `<div class="cf-chip ${APM.redisClusterFilter===c.id?'active':''}" onclick="APM.redisSetClusterFilter('${c.id}')"><span class="dot" style="background:#dc382d;"></span>${c.name}</div>`).join('')}
+  </div>`;
+};
+
+APM._redisApplyClusterFilter = function(rows) {
+  if (APM.redisClusterFilter === 'all') return rows;
+  return rows.filter(r => r.clusterId === APM.redisClusterFilter);
+};
+
+APM.redisCommandsTab = function() {
+  let list = APM.redisOps.filter(o => APM.inProject(o.svc));
+  list = APM._redisApplyClusterFilter(list);
+  list = list.slice().sort((a,b)=>b.count-a.count);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._redisClusterFilterBar()}
+    ${list.length === 0 ? '<div class="placeholder" style="margin:24px;"><div class="icon">⌨️</div>暂无命令样本</div>' : `<table class="tbl">
+      <thead><tr><th style="padding-left:14px;">命令模板</th><th>集群</th><th>服务</th><th>QPS</th><th>P99</th><th>命中率</th></tr></thead>
+      <tbody>
+        ${list.map(o => {
+          const c = APM.redisClusters.find(x=>x.id===o.clusterId);
+          return `<tr class="clickable" onclick="APM.openRedisClusterDetail('${o.clusterId}')">
+            <td class="mono" style="padding-left:14px;">${o.cmd}</td>
+            <td>${c ? `<a class="link" onclick="event.stopPropagation();APM.openRedisClusterDetail('${c.id}')">${c.name}</a>` : '—'}</td>
+            <td><a class="link" onclick="event.stopPropagation();APM.go('service',{id:'${o.svc}'})">${o.svc}</a></td>
+            <td class="mono">${o.count.toLocaleString()}</td>
+            <td class="mono">${o.p99Ms}ms</td>
+            <td class="mono">${o.hitPct}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+};
+
+APM.redisHotKeysTab = function() {
+  const list = APM._redisApplyClusterFilter(APM.redisHotKeys);
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._redisClusterFilterBar()}
+    <table class="tbl">
+      <thead><tr><th style="padding-left:14px;">Key 模式</th><th>集群</th><th>命令</th><th>QPS</th><th>大小</th><th>TTL</th></tr></thead>
+      <tbody>
+        ${list.map(k => {
+          const c = APM.redisClusters.find(x=>x.id===k.clusterId);
+          return `<tr>
+            <td class="mono" style="padding-left:14px;font-weight:500;">${k.key}</td>
+            <td>${c ? `<a class="link" onclick="APM.openRedisClusterDetail('${c.id}')">${c.name}</a>` : '—'}</td>
+            <td class="mono">${k.op}</td>
+            <td class="mono">${k.qps.toLocaleString()}</td>
+            <td class="mono">${k.sizeBytes>=1024?(k.sizeBytes/1024).toFixed(1)+'KB':k.sizeBytes+'B'}</td>
+            <td class="mono">${k.ttl}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+};
+
+APM.redisClientsTab = function() {
+  const list = APM._redisApplyClusterFilter(APM.redisClients).filter(x => APM.inProject(x.svc));
+  return `<div class="card" style="padding:0;overflow:hidden;">
+    ${APM._redisClusterFilterBar()}
+    <table class="tbl">
+      <thead><tr><th style="padding-left:14px;">服务</th><th>集群</th><th>连接数</th><th>Ops/s</th><th>P99</th></tr></thead>
+      <tbody>
+        ${list.map(x => {
+          const c = APM.redisClusters.find(y=>y.id===x.clusterId);
+          return `<tr>
+            <td style="padding-left:14px;"><a class="link" onclick="APM.go('service',{id:'${x.svc}'})">${x.svc}</a></td>
+            <td>${c ? `<a class="link" onclick="APM.openRedisClusterDetail('${c.id}')">${c.name}</a>` : '—'}</td>
+            <td class="mono">${x.conns}</td>
+            <td class="mono">${x.opsPerSec.toLocaleString()}</td>
+            <td class="mono">${x.p99Ms}ms</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+};
+
+APM.openRedisClusterDetail = function(id) {
+  const c = APM.redisClusters.find(x => x.id === id);
+  if (!c) return;
+  const ops = APM.redisOps.filter(o => o.clusterId === id);
+  const keys = APM.redisHotKeys.filter(k => k.clusterId === id);
+  const clients = APM.redisClients.filter(cl => cl.clusterId === id);
+  const memPct = (c.memUsedGB/c.memMaxGB*100);
+  APM.openModal({
+    title: `${c.name} · Redis 集群详情`,
+    width: 860,
+    body: `
+      <div class="grid-4" style="margin-bottom:14px;">
+        <div class="card kpi"><div class="name">QPS</div><div class="value">${c.qps.toLocaleString()}</div></div>
+        <div class="card kpi"><div class="name">P99</div><div class="value">${c.p99Ms}<span class="unit">ms</span></div></div>
+        <div class="card kpi"><div class="name">命中率</div><div class="value" style="color:${c.hitPct>=95?'var(--success)':'var(--warning)'};">${c.hitPct}<span class="unit">%</span></div></div>
+        <div class="card kpi"><div class="name">内存</div><div class="value">${memPct.toFixed(0)}<span class="unit">%</span></div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:10px;line-height:1.7;">
+        <div><strong>主机</strong> <span class="mono">${c.host}</span></div>
+        <div><strong>部署</strong> ${APM._redisModeIcon(c.mode)} ${c.mode} · ${c.nodes} 节点 · v${c.version}</div>
+        <div><strong>区域</strong> ${c.region}</div>
+        <div><strong>使用服务</strong> ${c.serviceUsers.map(s=>`<a class="link" onclick="APM.go('service',{id:'${s}'})">${s}</a>`).join(' · ')}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">Top 命令</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>命令</th><th>服务</th><th>QPS</th><th>P99</th></tr></thead>
+        <tbody>${ops.slice(0,6).map(o=>`<tr><td class="mono">${o.cmd}</td><td>${o.svc}</td><td class="mono">${o.count.toLocaleString()}</td><td class="mono">${o.p99Ms}ms</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">Hot Keys</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>Key</th><th>QPS</th><th>大小</th><th>TTL</th></tr></thead>
+        <tbody>${keys.map(k=>`<tr><td class="mono">${k.key}</td><td class="mono">${k.qps.toLocaleString()}</td><td class="mono">${k.sizeBytes>=1024?(k.sizeBytes/1024).toFixed(1)+'KB':k.sizeBytes+'B'}</td><td class="mono">${k.ttl}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">客户端</div>
+      <div class="card" style="padding:0;"><table class="tbl">
+        <thead><tr><th>服务</th><th>连接数</th><th>Ops/s</th><th>P99</th></tr></thead>
+        <tbody>${clients.map(cl=>`<tr><td>${cl.svc}</td><td class="mono">${cl.conns}</td><td class="mono">${cl.opsPerSec.toLocaleString()}</td><td class="mono">${cl.p99Ms}ms</td></tr>`).join('')}</tbody>
+      </table></div>
+    `,
+    footer: `<button class="pill" data-act="close">关闭</button>`
+  }).el.addEventListener('click', (ev) => {
+    if (ev.target.dataset.act) APM.closeModal(ev.currentTarget.id);
+  });
+};
+
+APM.renderRedis = function() {
+  const tab = APM.redisTab;
+  const totalQps = APM.redisClusters.reduce((a,b)=>a+b.qps, 0);
+  const avgHit = (APM.redisClusters.reduce((a,b)=>a+b.hitPct, 0) / APM.redisClusters.length).toFixed(1);
+  const evictTotal = APM.redisClusters.reduce((a,b)=>a+b.evictPerSec, 0);
+  return `
+    <div class="between">
+      <div>
+        <div class="page-title">Redis 缓存</div>
+        <div class="page-sub">${APM.redisClusters.length} 个集群 · cluster / sentinel / standalone · 多集群可观测</div>
+      </div>
+    </div>
+    <div class="grid-4" style="margin-top:14px;">
+      <div class="card kpi"><div class="name">集群数</div><div class="value">${APM.redisClusters.length}</div><div class="delta flat">3 模式</div></div>
+      <div class="card kpi"><div class="name">总 Ops/s</div><div class="value">${(totalQps/1000).toFixed(1)}<span class="unit">K</span></div><div class="delta up">▲ 4%</div></div>
+      <div class="card kpi"><div class="name">平均命中率</div><div class="value" style="color:var(--success);">${avgHit}<span class="unit">%</span></div><div class="delta flat">— 稳定</div></div>
+      <div class="card kpi"><div class="name">驱逐速率</div><div class="value" style="color:${evictTotal>50?'var(--danger)':evictTotal>0?'var(--warning)':'inherit'};">${evictTotal}<span class="unit">/s</span></div><div class="delta flat">${evictTotal>0?'lock-redis':'—'}</div></div>
+    </div>
+    <div class="subtabs">
+      ${[['clusters','集群', APM.redisClusters.length],['commands','命令', APM.redisOps.length],['hotkeys','Hot Keys', APM.redisHotKeys.length],['clients','客户端', APM.redisClients.length]].map(([id,label,c]) =>
+        `<div class="subtab ${tab===id?'active':''}" onclick="APM.redisSetTab('${id}')">${label}${c?`<span class="pill-mini">${c}</span>`:''}</div>`
+      ).join('')}
+    </div>
+    ${tab === 'clusters' ? APM.redisClustersTab() : tab === 'commands' ? APM.redisCommandsTab() : tab === 'hotkeys' ? APM.redisHotKeysTab() : APM.redisClientsTab()}
+  `;
 };
 
 // ---------- Onboarding: replace with multi-language ----------

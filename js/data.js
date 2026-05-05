@@ -108,6 +108,87 @@ APM.health = function(s) {
 };
 APM.healthColor = function(h) { return h === 'ok' ? 'var(--success)' : (h === 'warn' ? 'var(--warning)' : 'var(--danger)'); };
 
+// ============ DB / Redis / Kafka cluster directories (multi-cluster) ============
+// Each cluster acts as a "virtual service" (SkyWalking convention) — appears as a
+// topology node, has its own KPIs, and back-references its consumer services.
+APM.dbClusters = [
+  { id:'mysql-orders', name:'orders-mysql', type:'mysql', version:'8.0.32',
+    host:'10.32.4.21:3306', mode:'1主+2从', region:'cn-east-1',
+    qps:1240, p99:18, errPct:0.02, connUsed:142, connMax:200, sizeGB:240,
+    status:'ok', tables:38,
+    spark:[40,42,38,44,46,42,40,44,48,50,46,44,42,46],
+    serviceUsers:['order-service','checkout-service'] },
+  { id:'mysql-users', name:'users-mysql', type:'mysql', version:'8.0.32',
+    host:'10.32.4.30:3306', mode:'1主+2从', region:'cn-east-1',
+    qps:840, p99:9, errPct:0.01, connUsed:95, connMax:200, sizeGB:88,
+    status:'ok', tables:22,
+    spark:[28,30,26,32,30,28,32,30,28,32,30,28,30,32],
+    serviceUsers:['user-service','auth-service'] },
+  { id:'mysql-ledger', name:'ledger-mysql', type:'mysql', version:'8.0.36',
+    host:'10.32.4.42:3306', mode:'1主+2从', region:'cn-east-1',
+    qps:980, p99:42, errPct:0.18, connUsed:118, connMax:120, sizeGB:520,
+    status:'warn', tables:14,
+    spark:[55,60,58,65,72,68,75,80,82,88,90,86,84,82],
+    serviceUsers:['ledger-service'] },
+  { id:'pg-risk', name:'risk-pg', type:'postgres', version:'15.4',
+    host:'10.32.5.10:5432', mode:'主从同步流复制', region:'cn-east-1',
+    qps:540, p99:24, errPct:0.04, connUsed:62, connMax:120, sizeGB:140,
+    status:'ok', tables:18,
+    spark:[18,20,22,18,20,24,20,22,18,20,22,20,18,22],
+    serviceUsers:['risk-service'] },
+  { id:'tidb-finance', name:'finance-tidb', type:'tidb', version:'7.5.0',
+    host:'10.32.6.5:4000', mode:'3 PD + 6 TiKV + 3 TiDB', region:'cn-east-1',
+    qps:380, p99:62, errPct:0.06, connUsed:48, connMax:200, sizeGB:1100,
+    status:'ok', tables:42,
+    spark:[20,22,18,24,20,22,24,20,22,24,20,22,24,22],
+    serviceUsers:['invoice-api','reconcile-svc','tax-calc'] }
+];
+APM.redisClusters = [
+  { id:'redis-cache', name:'cache-cluster', mode:'cluster', nodes:6, version:'7.2.4',
+    host:'10.32.10.10:6379', region:'cn-east-1',
+    qps:8210, p99Ms:0.4, hitPct:96.4, memUsedGB:4.2, memMaxGB:8, evictPerSec:0,
+    status:'ok',
+    spark:[120,128,134,142,138,140,148,152,150,148,144,140,138,142],
+    serviceUsers:['gateway','user-service','auth-service','checkout-service'] },
+  { id:'redis-session', name:'session-redis', mode:'sentinel', nodes:3, version:'7.0.11',
+    host:'10.32.10.30:6379', region:'cn-east-1',
+    qps:1820, p99Ms:0.6, hitPct:99.1, memUsedGB:1.8, memMaxGB:4, evictPerSec:0,
+    status:'ok',
+    spark:[40,42,38,44,46,42,40,44,48,46,44,42,40,44],
+    serviceUsers:['auth-service','gateway'] },
+  { id:'redis-lock', name:'lock-redis', mode:'standalone', nodes:1, version:'7.2.4',
+    host:'10.32.10.50:6379', region:'cn-east-1',
+    qps:240, p99Ms:1.8, hitPct:88.2, memUsedGB:0.9, memMaxGB:2, evictPerSec:18,
+    status:'warn',
+    spark:[12,14,18,16,14,18,22,20,24,28,32,28,26,30],
+    serviceUsers:['risk-service','ledger-service'] }
+];
+APM.kafkaClusters = [
+  { id:'kafka-prod', name:'prod-events', version:'3.6.1', brokers:3,
+    region:'cn-east-1',
+    throughputInMB:120, throughputOutMB:180, lagTotal:1240, topicCount:5, groupCount:4,
+    status:'ok',
+    spark:[42,44,46,52,50,48,52,54,52,50,48,52,54,52] },
+  { id:'kafka-cdc', name:'ledger-cdc', version:'3.5.1', brokers:3,
+    region:'cn-east-1',
+    throughputInMB:48, throughputOutMB:46, lagTotal:18420, topicCount:1, groupCount:1,
+    status:'warn',
+    spark:[20,22,28,32,38,42,52,58,62,68,72,68,66,70] },
+  { id:'kafka-audit', name:'audit-stream', version:'3.6.1', brokers:3,
+    region:'cn-east-1',
+    throughputInMB:8, throughputOutMB:8, lagTotal:0, topicCount:2, groupCount:1,
+    status:'ok',
+    spark:[6,7,6,8,7,6,8,7,6,8,7,6,7,8] }
+];
+APM.clusterById = function(id) {
+  return APM.dbClusters.find(c=>c.id===id) || APM.redisClusters.find(c=>c.id===id) || APM.kafkaClusters.find(c=>c.id===id) || null;
+};
+APM.dbTypeMeta = {
+  mysql:    { label:'MySQL',      color:'#00758f', bg:'#e6f3f7', icon:'🐬' },
+  postgres: { label:'PostgreSQL', color:'#336791', bg:'#e9eef7', icon:'🐘' },
+  tidb:     { label:'TiDB',       color:'#d97706', bg:'#fef3e2', icon:'🔶' }
+};
+
 // Active alerts (pretend pulled from N9e)
 APM.alerts = [
   { id: 'al-001', state: 'firing', sev: 'critical', title: 'ledger-service 错误率超阈值', rule: 'ledger:err_rate > 1%', svc: 'ledger-service', startedAt: '18:22:14', duration: '14m', source: 'n9e' },
@@ -154,11 +235,14 @@ APM.exceptions = [
 
 // SQL templates (top slow queries)
 APM.slowQueries = [
-  { sql: 'SELECT * FROM orders WHERE user_id = ? AND status IN (?, ?, ?) ORDER BY created_at DESC LIMIT ?', svc: 'order-service', count: 1842, p99: 820, avg: 142, rows: '~250' },
-  { sql: 'SELECT risk_profile, score FROM user_risk WHERE user_id = ? FOR UPDATE', svc: 'risk-service', count: 1240, p99: 692, avg: 110, rows: '1' },
-  { sql: 'INSERT INTO ledger (order_id, amount, ts) VALUES (?, ?, ?)', svc: 'ledger-service', count: 980, p99: 408, avg: 88, rows: '1' },
-  { sql: 'UPDATE inventory SET qty = qty - ? WHERE sku = ? AND qty >= ?', svc: 'checkout-service', count: 720, p99: 312, avg: 64, rows: '1' },
-  { sql: 'SELECT COUNT(*) FROM events WHERE tenant = ? AND ts > ? AND type = ?', svc: 'notify-service', count: 540, p99: 286, avg: 52, rows: '1' }
+  { sql: 'SELECT * FROM orders WHERE user_id = ? AND status IN (?, ?, ?) ORDER BY created_at DESC LIMIT ?', svc: 'order-service', clusterId:'mysql-orders', count: 1842, p99: 820, avg: 142, rows: '~250' },
+  { sql: 'SELECT risk_profile, score FROM user_risk WHERE user_id = ? FOR UPDATE', svc: 'risk-service', clusterId:'pg-risk', count: 1240, p99: 692, avg: 110, rows: '1' },
+  { sql: 'INSERT INTO ledger (order_id, amount, ts) VALUES (?, ?, ?)', svc: 'ledger-service', clusterId:'mysql-ledger', count: 980, p99: 408, avg: 88, rows: '1' },
+  { sql: 'UPDATE inventory SET qty = qty - ? WHERE sku = ? AND qty >= ?', svc: 'checkout-service', clusterId:'mysql-orders', count: 720, p99: 312, avg: 64, rows: '1' },
+  { sql: 'SELECT COUNT(*) FROM events WHERE tenant = ? AND ts > ? AND type = ?', svc: 'notify-service', clusterId:'mysql-orders', count: 540, p99: 286, avg: 52, rows: '1' },
+  { sql: 'SELECT u.id, p.* FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.tenant=?', svc: 'user-service', clusterId:'mysql-users', count: 380, p99: 312, avg: 86, rows: '~120' },
+  { sql: 'SELECT * FROM invoice WHERE due_date BETWEEN ? AND ? AND status = ?', svc: 'invoice-api', clusterId:'tidb-finance', count: 240, p99: 920, avg: 188, rows: '~80' },
+  { sql: 'UPDATE ledger_journal SET reconciled = 1 WHERE batch_id = ?', svc: 'reconcile-svc', clusterId:'tidb-finance', count: 60, p99: 4200, avg: 1240, rows: '~50000' }
 ];
 
 // Endpoints (api-level) for service detail
@@ -210,9 +294,13 @@ APM.alertRules = [
   { id:'r-006', name:'http:5xx_rate > 2%', metric:'http:5xx_rate', op:'>', threshold:'2%', forDur:'2m', svc:'gateway', sev:'critical', enabled:true },
   { id:'r-007', name:'redis:timeout > 0', metric:'redis:timeout', op:'>', threshold:'0', forDur:'1m', svc:'*', sev:'warning', enabled:false },
   { id:'r-008', name:'apdex < 0.85', metric:'svc:apdex', op:'<', threshold:'0.85', forDur:'15m', svc:'*', sev:'warning', enabled:true },
-  { id:'r-009', name:'kafka:lag > 10k',         metric:'kafka:consumer_lag',    op:'>', threshold:'10000',  forDur:'5m', svc:'ledger-service', sev:'critical', enabled:true },
-  { id:'r-010', name:'kafka:isr < replicas',    metric:'kafka:isr_under_min',   op:'>', threshold:'0',      forDur:'2m', svc:'*',              sev:'critical', enabled:true },
-  { id:'r-011', name:'kafka:rebalance > 5/min', metric:'kafka:group_rebalance', op:'>', threshold:'5/min',  forDur:'2m', svc:'*',              sev:'warning',  enabled:true }
+  { id:'r-009', name:'kafka:lag > 10k',          metric:'kafka:consumer_lag',     op:'>', threshold:'10000',  forDur:'5m',  svc:'ledger-service', sev:'critical', enabled:true },
+  { id:'r-010', name:'kafka:isr < replicas',     metric:'kafka:isr_under_min',    op:'>', threshold:'0',      forDur:'2m',  svc:'*',              sev:'critical', enabled:true },
+  { id:'r-011', name:'kafka:rebalance > 5/min',  metric:'kafka:group_rebalance',  op:'>', threshold:'5/min',  forDur:'2m',  svc:'*',              sev:'warning',  enabled:true },
+  { id:'r-012', name:'mysql-orders conn pool > 90%', metric:'mysql:conn_pct',     op:'>', threshold:'90%',    forDur:'5m',  svc:'cluster:mysql-orders', sev:'warning',  enabled:true },
+  { id:'r-013', name:'redis-cache evict > 100/s',    metric:'redis:eviction_rate',op:'>', threshold:'100/s',  forDur:'3m',  svc:'cluster:redis-cache',  sev:'warning',  enabled:true },
+  { id:'r-014', name:'kafka-prod broker disk > 80%', metric:'kafka:broker_disk',  op:'>', threshold:'80%',    forDur:'10m', svc:'cluster:kafka-prod',   sev:'critical', enabled:true },
+  { id:'r-015', name:'tidb-finance replica lag>5s',  metric:'tidb:replica_lag',   op:'>', threshold:'5s',     forDur:'2m',  svc:'cluster:tidb-finance', sev:'critical', enabled:true }
 ];
 
 // On-call schedules (Alerts → 值班 sub-tab)
@@ -232,39 +320,69 @@ APM.silences = [
 
 // N+1 suspects (Database → N+1 sub-tab)
 APM.nplusOne = [
-  { parent:'SELECT * FROM orders WHERE user_id = ?', child:'SELECT * FROM order_items WHERE order_id = ?', mult:'~250×', svc:'order-service', traces:142, exampleTrace:'4f2c9a...b801' },
-  { parent:'SELECT id FROM users LIMIT ?', child:'SELECT score FROM user_risk WHERE user_id = ?', mult:'~50×', svc:'risk-service', traces:58, exampleTrace:'e28f41...9a20' },
-  { parent:'SELECT id FROM carts WHERE user_id = ?', child:'SELECT qty FROM inventory WHERE sku = ?', mult:'~12×', svc:'checkout-service', traces:32, exampleTrace:'a91d2e...7cf2' },
-  { parent:'SELECT campaign_id FROM events WHERE tenant=?', child:'SELECT title FROM campaigns WHERE id=?', mult:'~30×', svc:'notify-service', traces:18, exampleTrace:'f6b222...e1a8' }
+  { parent:'SELECT * FROM orders WHERE user_id = ?', child:'SELECT * FROM order_items WHERE order_id = ?', mult:'~250×', svc:'order-service', clusterId:'mysql-orders', traces:142, exampleTrace:'4f2c9a...b801' },
+  { parent:'SELECT id FROM users LIMIT ?', child:'SELECT score FROM user_risk WHERE user_id = ?', mult:'~50×', svc:'risk-service', clusterId:'pg-risk', traces:58, exampleTrace:'e28f41...9a20' },
+  { parent:'SELECT id FROM carts WHERE user_id = ?', child:'SELECT qty FROM inventory WHERE sku = ?', mult:'~12×', svc:'checkout-service', clusterId:'mysql-orders', traces:32, exampleTrace:'a91d2e...7cf2' },
+  { parent:'SELECT campaign_id FROM events WHERE tenant=?', child:'SELECT title FROM campaigns WHERE id=?', mult:'~30×', svc:'notify-service', clusterId:'mysql-orders', traces:18, exampleTrace:'f6b222...e1a8' },
+  { parent:'SELECT batch_id FROM ledger_batch WHERE date=?', child:'SELECT SUM(amount) FROM ledger_journal WHERE batch_id=?', mult:'~80×', svc:'reconcile-svc', clusterId:'tidb-finance', traces:24, exampleTrace:'1d0c55...77b3' }
 ];
 
 // Connection pools (Database → 连接池 sub-tab)
 APM.connectionPools = [
-  { svc:'checkout-service', pool:'HikariCP/mysql-main', active:18, idle:2, pending:4, max:20, waitMs:312, state:'warn' },
-  { svc:'order-service', pool:'HikariCP/mysql-main', active:12, idle:8, pending:0, max:20, waitMs:0, state:'ok' },
-  { svc:'ledger-service', pool:'HikariCP/mysql-ledger', active:9, idle:3, pending:2, max:12, waitMs:188, state:'warn' },
-  { svc:'risk-service', pool:'pgbouncer/pg-risk', active:8, idle:4, pending:0, max:16, waitMs:12, state:'ok' },
-  { svc:'user-service', pool:'asyncpg/pg-users', active:6, idle:10, pending:0, max:16, waitMs:0, state:'ok' }
+  { svc:'checkout-service', pool:'HikariCP', clusterId:'mysql-orders', active:18, idle:2, pending:4, max:20, waitMs:312, state:'warn' },
+  { svc:'order-service',    pool:'HikariCP', clusterId:'mysql-orders', active:12, idle:8, pending:0, max:20, waitMs:0,   state:'ok' },
+  { svc:'ledger-service',   pool:'HikariCP', clusterId:'mysql-ledger', active:9,  idle:3, pending:2, max:12, waitMs:188, state:'warn' },
+  { svc:'risk-service',     pool:'pgbouncer', clusterId:'pg-risk',     active:8,  idle:4, pending:0, max:16, waitMs:12,  state:'ok' },
+  { svc:'user-service',     pool:'asyncpg',   clusterId:'mysql-users', active:6,  idle:10, pending:0, max:16, waitMs:0,  state:'ok' },
+  { svc:'invoice-api',      pool:'HikariCP',  clusterId:'tidb-finance',active:14, idle:2, pending:0, max:20, waitMs:0,   state:'ok' },
+  { svc:'reconcile-svc',    pool:'HikariCP',  clusterId:'tidb-finance',active:18, idle:0, pending:6, max:20, waitMs:1240,state:'warn' }
 ];
 
 // Transactions (Database → 事务 sub-tab)
 APM.transactions = [
-  { svc:'checkout-service', name:'placeOrder', avgMs:312, count:480, commitPct:'98.4%', rollbackPct:'1.6%' },
-  { svc:'ledger-service', name:'writeLedger', avgMs:88, count:980, commitPct:'94.8%', rollbackPct:'5.2%' },
-  { svc:'order-service', name:'cancelOrder', avgMs:142, count:62, commitPct:'100%', rollbackPct:'0%' },
-  { svc:'payment-service', name:'capturePayment', avgMs:198, count:240, commitPct:'99.6%', rollbackPct:'0.4%' },
-  { svc:'checkout-service', name:'applyCoupon', avgMs:64, count:110, commitPct:'97.2%', rollbackPct:'2.8%' },
-  { svc:'risk-service', name:'updateRiskProfile', avgMs:108, count:540, commitPct:'100%', rollbackPct:'0%' }
+  { svc:'checkout-service', clusterId:'mysql-orders',  name:'placeOrder',          avgMs:312,  count:480, commitPct:'98.4%', rollbackPct:'1.6%' },
+  { svc:'ledger-service',   clusterId:'mysql-ledger',  name:'writeLedger',         avgMs:88,   count:980, commitPct:'94.8%', rollbackPct:'5.2%' },
+  { svc:'order-service',    clusterId:'mysql-orders',  name:'cancelOrder',         avgMs:142,  count:62,  commitPct:'100%',  rollbackPct:'0%' },
+  { svc:'payment-service',  clusterId:'mysql-orders',  name:'capturePayment',      avgMs:198,  count:240, commitPct:'99.6%', rollbackPct:'0.4%' },
+  { svc:'checkout-service', clusterId:'mysql-orders',  name:'applyCoupon',         avgMs:64,   count:110, commitPct:'97.2%', rollbackPct:'2.8%' },
+  { svc:'risk-service',     clusterId:'pg-risk',       name:'updateRiskProfile',   avgMs:108,  count:540, commitPct:'100%',  rollbackPct:'0%' },
+  { svc:'reconcile-svc',    clusterId:'tidb-finance',  name:'monthEndReconcile',   avgMs:1240, count:18,  commitPct:'88.9%', rollbackPct:'11.1%' }
 ];
 
-// Redis ops (Database → Redis sub-tab)
+// Redis ops (cluster scoped) — moved to Redis page; kept here for reuse.
 APM.redisOps = [
-  { cmd:'GET user:profile:*', svc:'user-service', count:4820, p99Ms:8, hitPct:'94%' },
-  { cmd:'SETEX session:*', svc:'auth-service', count:980, p99Ms:6, hitPct:'—' },
-  { cmd:'INCR rate-limit:*', svc:'gateway', count:6210, p99Ms:4, hitPct:'—' },
-  { cmd:'HGETALL cart:*', svc:'checkout-service', count:520, p99Ms:14, hitPct:'82%' },
-  { cmd:'ZADD risk-queue', svc:'risk-service', count:240, p99Ms:18, hitPct:'—' },
-  { cmd:'LPUSH notify:fanout', svc:'notify-service', count:410, p99Ms:6, hitPct:'—' }
+  { cmd:'GET user:profile:*',    svc:'user-service',     clusterId:'redis-cache',   count:4820, p99Ms:0.4, hitPct:'94%' },
+  { cmd:'SETEX session:*',       svc:'auth-service',     clusterId:'redis-session', count:980,  p99Ms:0.6, hitPct:'—' },
+  { cmd:'INCR rate-limit:*',     svc:'gateway',          clusterId:'redis-cache',   count:6210, p99Ms:0.3, hitPct:'—' },
+  { cmd:'HGETALL cart:*',        svc:'checkout-service', clusterId:'redis-cache',   count:520,  p99Ms:1.2, hitPct:'82%' },
+  { cmd:'SETNX lock:order:*',    svc:'risk-service',     clusterId:'redis-lock',    count:240,  p99Ms:1.8, hitPct:'—' },
+  { cmd:'EXPIRE lock:ledger:*',  svc:'ledger-service',   clusterId:'redis-lock',    count:120,  p99Ms:1.6, hitPct:'—' },
+  { cmd:'GET token:jwt:*',       svc:'gateway',          clusterId:'redis-session', count:1820, p99Ms:0.5, hitPct:'99%' },
+  { cmd:'LPUSH notify:fanout',   svc:'notify-service',   clusterId:'redis-cache',   count:410,  p99Ms:0.5, hitPct:'—' },
+  { cmd:'SET csrf:token:*',      svc:'auth-service',     clusterId:'redis-session', count:280,  p99Ms:0.4, hitPct:'—' }
+];
+
+// Redis hot keys (per cluster)
+APM.redisHotKeys = [
+  { clusterId:'redis-cache',   key:'rate-limit:gateway:ip:*', op:'INCR',   qps:6210, sizeBytes:24,    ttl:'60s' },
+  { clusterId:'redis-cache',   key:'user:profile:u_*',         op:'GET',    qps:4820, sizeBytes:512,   ttl:'5m'  },
+  { clusterId:'redis-cache',   key:'cart:c_*',                 op:'HGETALL',qps:520,  sizeBytes:1840,  ttl:'30m' },
+  { clusterId:'redis-session', key:'session:s_*',              op:'GET',    qps:1820, sizeBytes:320,   ttl:'24h' },
+  { clusterId:'redis-session', key:'csrf:token:*',             op:'SET',    qps:280,  sizeBytes:48,    ttl:'1h'  },
+  { clusterId:'redis-lock',    key:'lock:order:o_*',           op:'SETNX',  qps:240,  sizeBytes:64,    ttl:'10s' },
+  { clusterId:'redis-lock',    key:'lock:ledger:b_*',          op:'EXPIRE', qps:120,  sizeBytes:64,    ttl:'30s' }
+];
+
+// Redis client/connection summary (per cluster)
+APM.redisClients = [
+  { clusterId:'redis-cache',   svc:'gateway',          conns:42, opsPerSec:6500, p99Ms:0.3 },
+  { clusterId:'redis-cache',   svc:'user-service',     conns:18, opsPerSec:4900, p99Ms:0.5 },
+  { clusterId:'redis-cache',   svc:'auth-service',     conns:14, opsPerSec:1200, p99Ms:0.4 },
+  { clusterId:'redis-cache',   svc:'checkout-service', conns:12, opsPerSec:580,  p99Ms:1.2 },
+  { clusterId:'redis-session', svc:'auth-service',     conns:10, opsPerSec:1320, p99Ms:0.6 },
+  { clusterId:'redis-session', svc:'gateway',          conns:8,  opsPerSec:520,  p99Ms:0.4 },
+  { clusterId:'redis-lock',    svc:'risk-service',     conns:4,  opsPerSec:240,  p99Ms:1.8 },
+  { clusterId:'redis-lock',    svc:'ledger-service',   conns:3,  opsPerSec:120,  p99Ms:1.6 }
 ];
 
 // Settings · Members (mutable list — supports CRUD)
@@ -295,53 +413,62 @@ APM.tokens = [
   { name:'ci-bot', scope:'traces:write', prefix:'tk_ci_550a…', createdAt:'2024-06-30', usedAt:'1d 前', active:true }
 ];
 
-// Kafka · Topics (Kafka 消息 page)
+// Kafka · Topics (Kafka 消息 page) — clusterId references APM.kafkaClusters
 APM.kafkaTopics = [
-  { name:'order-events',       partitions:12, replication:3, isr:3, retention:'7d',  msgRate:1820, mbRate:6.4,  p99PubMs:18, p99ConMs:42, lag:240,    alerts:0, owner:'order-service', cleanup:'delete' },
-  { name:'payment-events',     partitions:8,  replication:3, isr:3, retention:'30d', msgRate:820,  mbRate:3.2,  p99PubMs:14, p99ConMs:38, lag:18,     alerts:0, owner:'payment-service', cleanup:'delete' },
-  { name:'ledger-cdc',         partitions:6,  replication:3, isr:2, retention:'7d',  msgRate:1240, mbRate:4.8,  p99PubMs:22, p99ConMs:56, lag:18420,  alerts:1, owner:'ledger-service', cleanup:'compact' },
-  { name:'risk-decisions',     partitions:6,  replication:3, isr:3, retention:'14d', msgRate:640,  mbRate:1.8,  p99PubMs:12, p99ConMs:34, lag:120,    alerts:0, owner:'risk-service', cleanup:'delete' },
-  { name:'notify-fanout',      partitions:16, replication:3, isr:3, retention:'3d',  msgRate:2410, mbRate:5.1,  p99PubMs:10, p99ConMs:28, lag:560,    alerts:0, owner:'notify-service', cleanup:'delete' },
-  { name:'user-activity',      partitions:24, replication:3, isr:3, retention:'30d', msgRate:6820, mbRate:14.2, p99PubMs:8,  p99ConMs:22, lag:140,    alerts:0, owner:'user-service', cleanup:'delete' },
-  { name:'audit-log',          partitions:4,  replication:3, isr:3, retention:'180d',msgRate:120,  mbRate:0.4,  p99PubMs:8,  p99ConMs:12, lag:0,      alerts:0, owner:'gateway',     cleanup:'delete' },
-  { name:'inventory-snapshot', partitions:8,  replication:3, isr:3, retention:'compact', msgRate:60, mbRate:0.6, p99PubMs:14, p99ConMs:28, lag:8,    alerts:0, owner:'checkout-service', cleanup:'compact' }
+  { clusterId:'kafka-prod',  name:'order-events',       partitions:12, replication:3, isr:3, retention:'7d',  msgRate:1820, mbRate:6.4,  p99PubMs:18, p99ConMs:42, lag:240,    alerts:0, owner:'order-service',    cleanup:'delete' },
+  { clusterId:'kafka-prod',  name:'payment-events',     partitions:8,  replication:3, isr:3, retention:'30d', msgRate:820,  mbRate:3.2,  p99PubMs:14, p99ConMs:38, lag:18,     alerts:0, owner:'payment-service',  cleanup:'delete' },
+  { clusterId:'kafka-cdc',   name:'ledger-cdc',         partitions:6,  replication:3, isr:2, retention:'7d',  msgRate:1240, mbRate:4.8,  p99PubMs:22, p99ConMs:56, lag:18420,  alerts:1, owner:'ledger-service',   cleanup:'compact' },
+  { clusterId:'kafka-prod',  name:'risk-decisions',     partitions:6,  replication:3, isr:3, retention:'14d', msgRate:640,  mbRate:1.8,  p99PubMs:12, p99ConMs:34, lag:120,    alerts:0, owner:'risk-service',     cleanup:'delete' },
+  { clusterId:'kafka-prod',  name:'notify-fanout',      partitions:16, replication:3, isr:3, retention:'3d',  msgRate:2410, mbRate:5.1,  p99PubMs:10, p99ConMs:28, lag:560,    alerts:0, owner:'notify-service',   cleanup:'delete' },
+  { clusterId:'kafka-prod',  name:'user-activity',      partitions:24, replication:3, isr:3, retention:'30d', msgRate:6820, mbRate:14.2, p99PubMs:8,  p99ConMs:22, lag:140,    alerts:0, owner:'user-service',     cleanup:'delete' },
+  { clusterId:'kafka-audit', name:'audit-log',          partitions:4,  replication:3, isr:3, retention:'180d',msgRate:120,  mbRate:0.4,  p99PubMs:8,  p99ConMs:12, lag:0,      alerts:0, owner:'gateway',          cleanup:'delete' },
+  { clusterId:'kafka-audit', name:'security-events',    partitions:4,  replication:3, isr:3, retention:'180d',msgRate:18,   mbRate:0.1,  p99PubMs:8,  p99ConMs:14, lag:0,      alerts:0, owner:'auth-service',     cleanup:'delete' },
+  { clusterId:'kafka-prod',  name:'inventory-snapshot', partitions:8,  replication:3, isr:3, retention:'compact', msgRate:60, mbRate:0.6, p99PubMs:14, p99ConMs:28, lag:8,     alerts:0, owner:'checkout-service', cleanup:'compact' }
 ];
 
 // Kafka · Consumer groups
 APM.kafkaGroups = [
-  { name:'risk-consumer',     members:3, topics:['order-events','payment-events'], lag:240,   lagDelta:'+12',   status:'stable',    rebalances1h:0, lastRebalance:'2h 前' },
-  { name:'ledger-writer',     members:2, topics:['ledger-cdc'],                     lag:18420, lagDelta:'+1820', status:'lag-rising', rebalances1h:0, lastRebalance:'18m 前' },
-  { name:'notify-dispatcher', members:6, topics:['notify-fanout'],                  lag:560,   lagDelta:'-40',   status:'stable',    rebalances1h:1, lastRebalance:'12m 前' },
-  { name:'user-activity-bi',  members:4, topics:['user-activity'],                  lag:140,   lagDelta:'-20',   status:'stable',    rebalances1h:0, lastRebalance:'昨天' },
-  { name:'audit-archiver',    members:1, topics:['audit-log'],                      lag:0,     lagDelta:'0',     status:'idle',      rebalances1h:0, lastRebalance:'3d 前' }
+  { clusterId:'kafka-prod',  name:'risk-consumer',     members:3, topics:['order-events','payment-events'], lag:240,   lagDelta:'+12',   status:'stable',    rebalances1h:0, lastRebalance:'2h 前' },
+  { clusterId:'kafka-cdc',   name:'ledger-writer',     members:2, topics:['ledger-cdc'],                     lag:18420, lagDelta:'+1820', status:'lag-rising', rebalances1h:0, lastRebalance:'18m 前' },
+  { clusterId:'kafka-prod',  name:'notify-dispatcher', members:6, topics:['notify-fanout'],                  lag:560,   lagDelta:'-40',   status:'stable',    rebalances1h:1, lastRebalance:'12m 前' },
+  { clusterId:'kafka-prod',  name:'user-activity-bi',  members:4, topics:['user-activity'],                  lag:140,   lagDelta:'-20',   status:'stable',    rebalances1h:0, lastRebalance:'昨天' },
+  { clusterId:'kafka-audit', name:'audit-archiver',    members:1, topics:['audit-log','security-events'],    lag:0,     lagDelta:'0',     status:'idle',      rebalances1h:0, lastRebalance:'3d 前' }
 ];
 
-// Kafka · Brokers
+// Kafka · Brokers (per cluster)
 APM.kafkaBrokers = [
-  { id:1, host:'kafka-01.eshop.cluster:9092', isr:48, leader:24, diskPct:62, netInMB:38.4, netOutMB:42.8, controller:true,  status:'ok' },
-  { id:2, host:'kafka-02.eshop.cluster:9092', isr:48, leader:22, diskPct:58, netInMB:34.2, netOutMB:39.1, controller:false, status:'ok' },
-  { id:3, host:'kafka-03.eshop.cluster:9092', isr:46, leader:22, diskPct:71, netInMB:31.8, netOutMB:36.4, controller:false, status:'warn' }
+  { clusterId:'kafka-prod',  id:1, host:'kafka-prod-01:9092',  isr:48, leader:24, diskPct:62, netInMB:38.4, netOutMB:42.8, controller:true,  status:'ok' },
+  { clusterId:'kafka-prod',  id:2, host:'kafka-prod-02:9092',  isr:48, leader:22, diskPct:58, netInMB:34.2, netOutMB:39.1, controller:false, status:'ok' },
+  { clusterId:'kafka-prod',  id:3, host:'kafka-prod-03:9092',  isr:46, leader:22, diskPct:71, netInMB:31.8, netOutMB:36.4, controller:false, status:'warn' },
+  { clusterId:'kafka-cdc',   id:1, host:'kafka-cdc-01:9092',   isr:6,  leader:2,  diskPct:48, netInMB:18.4, netOutMB:18.8, controller:true,  status:'ok' },
+  { clusterId:'kafka-cdc',   id:2, host:'kafka-cdc-02:9092',   isr:6,  leader:2,  diskPct:50, netInMB:16.2, netOutMB:14.1, controller:false, status:'ok' },
+  { clusterId:'kafka-cdc',   id:3, host:'kafka-cdc-03:9092',   isr:5,  leader:2,  diskPct:84, netInMB:13.8, netOutMB:13.4, controller:false, status:'warn' },
+  { clusterId:'kafka-audit', id:1, host:'kafka-audit-01:9092', isr:8,  leader:3,  diskPct:22, netInMB:2.4,  netOutMB:2.8,  controller:true,  status:'ok' },
+  { clusterId:'kafka-audit', id:2, host:'kafka-audit-02:9092', isr:8,  leader:3,  diskPct:22, netInMB:2.6,  netOutMB:2.6,  controller:false, status:'ok' },
+  { clusterId:'kafka-audit', id:3, host:'kafka-audit-03:9092', isr:8,  leader:2,  diskPct:23, netInMB:2.8,  netOutMB:2.6,  controller:false, status:'ok' }
 ];
 
-// Kafka · Producer / Consumer maps (svc → topic) — generated for tables and Service-detail Kafka tab
+// Kafka · Producer / Consumer maps — clusterId derived from topic, but stored explicitly for filtering
 APM.kafkaProducers = [
-  { svc:'order-service',     topic:'order-events',   rate:1820, errPct:0.04, p99PubMs:18 },
-  { svc:'payment-service',   topic:'payment-events', rate:820,  errPct:0.02, p99PubMs:14 },
-  { svc:'ledger-service',    topic:'ledger-cdc',     rate:1240, errPct:0.42, p99PubMs:22 },
-  { svc:'risk-service',      topic:'risk-decisions', rate:640,  errPct:0.06, p99PubMs:12 },
-  { svc:'checkout-service',  topic:'order-events',   rate:240,  errPct:0.08, p99PubMs:16 },
-  { svc:'checkout-service',  topic:'inventory-snapshot', rate:60, errPct:0,  p99PubMs:14 },
-  { svc:'gateway',           topic:'audit-log',      rate:120,  errPct:0,    p99PubMs:8  },
-  { svc:'user-service',      topic:'user-activity',  rate:6820, errPct:0.02, p99PubMs:8  },
-  { svc:'notify-service',    topic:'notify-fanout',  rate:2410, errPct:0.04, p99PubMs:10 }
+  { clusterId:'kafka-prod',  svc:'order-service',     topic:'order-events',       rate:1820, errPct:0.04, p99PubMs:18 },
+  { clusterId:'kafka-prod',  svc:'payment-service',   topic:'payment-events',     rate:820,  errPct:0.02, p99PubMs:14 },
+  { clusterId:'kafka-cdc',   svc:'ledger-service',    topic:'ledger-cdc',         rate:1240, errPct:0.42, p99PubMs:22 },
+  { clusterId:'kafka-prod',  svc:'risk-service',      topic:'risk-decisions',     rate:640,  errPct:0.06, p99PubMs:12 },
+  { clusterId:'kafka-prod',  svc:'checkout-service',  topic:'order-events',       rate:240,  errPct:0.08, p99PubMs:16 },
+  { clusterId:'kafka-prod',  svc:'checkout-service',  topic:'inventory-snapshot', rate:60,   errPct:0,    p99PubMs:14 },
+  { clusterId:'kafka-audit', svc:'gateway',           topic:'audit-log',          rate:120,  errPct:0,    p99PubMs:8  },
+  { clusterId:'kafka-audit', svc:'auth-service',      topic:'security-events',    rate:18,   errPct:0,    p99PubMs:8  },
+  { clusterId:'kafka-prod',  svc:'user-service',      topic:'user-activity',      rate:6820, errPct:0.02, p99PubMs:8  },
+  { clusterId:'kafka-prod',  svc:'notify-service',    topic:'notify-fanout',      rate:2410, errPct:0.04, p99PubMs:10 }
 ];
 APM.kafkaConsumers = [
-  { svc:'risk-service',     group:'risk-consumer',     topic:'order-events',   rate:1820, p99ConMs:34, lag:140 },
-  { svc:'risk-service',     group:'risk-consumer',     topic:'payment-events', rate:820,  p99ConMs:38, lag:100 },
-  { svc:'ledger-service',   group:'ledger-writer',     topic:'ledger-cdc',     rate:1180, p99ConMs:56, lag:18420 },
-  { svc:'notify-service',   group:'notify-dispatcher', topic:'notify-fanout',  rate:2380, p99ConMs:28, lag:560 },
-  { svc:'user-service',     group:'user-activity-bi',  topic:'user-activity',  rate:6800, p99ConMs:22, lag:140 },
-  { svc:'gateway',          group:'audit-archiver',    topic:'audit-log',      rate:120,  p99ConMs:12, lag:0   }
+  { clusterId:'kafka-prod',  svc:'risk-service',     group:'risk-consumer',     topic:'order-events',     rate:1820, p99ConMs:34, lag:140 },
+  { clusterId:'kafka-prod',  svc:'risk-service',     group:'risk-consumer',     topic:'payment-events',   rate:820,  p99ConMs:38, lag:100 },
+  { clusterId:'kafka-cdc',   svc:'ledger-service',   group:'ledger-writer',     topic:'ledger-cdc',       rate:1180, p99ConMs:56, lag:18420 },
+  { clusterId:'kafka-prod',  svc:'notify-service',   group:'notify-dispatcher', topic:'notify-fanout',    rate:2380, p99ConMs:28, lag:560 },
+  { clusterId:'kafka-prod',  svc:'user-service',     group:'user-activity-bi',  topic:'user-activity',    rate:6800, p99ConMs:22, lag:140 },
+  { clusterId:'kafka-audit', svc:'gateway',          group:'audit-archiver',    topic:'audit-log',        rate:120,  p99ConMs:12, lag:0   },
+  { clusterId:'kafka-audit', svc:'gateway',          group:'audit-archiver',    topic:'security-events',  rate:18,   p99ConMs:14, lag:0   }
 ];
 
 // Settings · Audit (mutable; new actions are prepended)
