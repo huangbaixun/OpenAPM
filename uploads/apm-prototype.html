@@ -1,0 +1,1906 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1440, initial-scale=1" />
+<title>啄木鸟 2.0 · 应用性能监控</title>
+<style>
+  /* ===========================================================
+     啄木鸟 2.0 — Prototype
+     Design language: minimal, glass, spacious — inspired by Apple HIG
+     =========================================================== */
+
+  :root {
+    --bg: #f5f5f7;
+    --bg-elev-0: #ffffff;
+    --bg-elev-1: #ffffffcc;
+    --bg-elev-2: #ffffff;
+    --bg-sidebar: #fbfbfdcc;
+    --bg-topbar: #ffffffcc;
+    --bg-hover: #0000000a;
+    --bg-active: #0071e310;
+    --border: #00000010;
+    --border-strong: #0000001a;
+    --text-1: #1d1d1f;
+    --text-2: #515154;
+    --text-3: #86868b;
+    --accent: #0071e3;
+    --accent-weak: #0071e315;
+    --success: #34c759;
+    --warning: #ff9f0a;
+    --danger: #ff3b30;
+    --purple: #af52de;
+    --teal: #30b0c7;
+    --pink: #ff375f;
+    --grid: #00000008;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.03);
+    --shadow-md: 0 4px 16px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.04);
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #000000;
+    --bg-elev-0: #0b0b0e;
+    --bg-elev-1: #15151acc;
+    --bg-elev-2: #1c1c1f;
+    --bg-sidebar: #0f0f12cc;
+    --bg-topbar: #0b0b0ecc;
+    --bg-hover: #ffffff0a;
+    --bg-active: #0a84ff18;
+    --border: #ffffff10;
+    --border-strong: #ffffff1a;
+    --text-1: #f5f5f7;
+    --text-2: #a1a1a6;
+    --text-3: #6e6e73;
+    --accent: #0a84ff;
+    --accent-weak: #0a84ff20;
+    --success: #30d158;
+    --warning: #ff9f0a;
+    --danger: #ff453a;
+    --purple: #bf5af2;
+    --teal: #64d2ff;
+    --pink: #ff375f;
+    --grid: #ffffff06;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+    --shadow-md: 0 6px 20px rgba(0,0,0,.5);
+    --shadow-lg: 0 24px 60px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "PingFang SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+    background: var(--bg);
+    color: var(--text-1);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background .4s ease, color .3s ease;
+  }
+
+  /* ===== Layout ===== */
+  .app { display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
+  .topbar { grid-column: 1 / -1; grid-row: 1; }
+  .sidebar { grid-row: 2; }
+  .main { grid-row: 2; padding: 20px 24px 40px; overflow: auto; }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 16px 0 0;
+    background: var(--bg-topbar);
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: visible;
+  }
+  .brand { display:flex; align-items:center; gap:10px; width: 232px; flex-shrink: 0; padding: 0 14px 0 18px; border-right: 1px solid var(--border); height:56px; box-sizing: border-box; }
+  .brand .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #ff3b30 0%, #ff6a00 55%, #ff9f0a 100%);
+    box-shadow: var(--shadow-sm), inset 0 0 0 1px #ffffff25;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand .logo svg { display:block; }
+  .brand .name { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  .brand .sub { color: var(--text-3); font-size:11px; font-weight: 500; margin-left:2px; }
+
+  .filters { display:flex; gap:8px; align-items:center; flex: 1; min-width: 0; padding-left: 14px; overflow: visible; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display:none; }
+  .pill {
+    display:inline-flex; align-items:center; gap:6px;
+    height: 32px; padding: 0 12px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text-1);
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .08s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .pill:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .pill .k { color: var(--text-3); font-weight: 500; }
+  .pill .v { color: var(--text-1); font-weight: 600; }
+  .pill .caret { opacity: .5; margin-left: 2px; }
+  .pill .dot { width:6px; height:6px; border-radius:50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent); }
+
+  .spacer { flex: 1; }
+
+  .topbar .right { display:flex; align-items:center; gap:8px; flex-shrink: 0; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 9px;
+    display:inline-flex; align-items:center; justify-content:center;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2);
+    cursor:pointer; transition: all .15s;
+  }
+  .icon-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+  .icon-btn.active { background: var(--accent-weak); color: var(--accent); }
+  .theme-btn .theme-sun { display: none; }
+  :root[data-theme="dark"] .theme-btn .theme-moon { display: none; }
+  :root[data-theme="dark"] .theme-btn .theme-sun { display: block; }
+
+  /* Dropdown (time range etc) */
+  .dd { position: relative; }
+  .dd-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; right: auto;
+    min-width: 240px;
+    background: var(--bg-elev-0);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    opacity: 0; visibility: hidden;
+    transform: translateY(-4px) scale(.98);
+    transform-origin: top left;
+    transition: opacity .15s, transform .15s, visibility .15s;
+    z-index: 60;
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+  }
+  /* Top-bar right-side dropdowns open toward the left */
+  .topbar .right .dd-menu { left: auto; right: 0; transform-origin: top right; }
+  .dd.open .dd-menu { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+  .dd-section {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-3); font-weight: 600;
+    padding: 6px 10px 4px;
+  }
+  .dd-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 10px; border-radius: 8px;
+    font-size: 12.5px; color: var(--text-1); font-weight: 500;
+    cursor: pointer; user-select: none;
+  }
+  .dd-item:hover { background: var(--bg-hover); }
+  .dd-item.selected { background: var(--accent-weak); color: var(--accent); font-weight: 600; }
+  .dd-item .kbd {
+    font-family: "SF Mono", ui-monospace, monospace; font-size: 11px;
+    color: var(--text-3); background: var(--bg-hover);
+    padding: 1px 6px; border-radius: 5px;
+  }
+  .dd-item.selected .kbd { color: var(--accent); background: var(--accent-weak); }
+  .dd-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+  .env-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align: middle; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent); }
+
+  /* Multi-select checkbox inside dd */
+  .chkbox { width:14px; height:14px; border-radius:4px; border:1.5px solid var(--border-strong); display:inline-block; vertical-align:middle; margin-right:8px; position:relative; flex-shrink: 0; }
+  .dd-item.checked .chkbox { background:var(--accent); border-color:var(--accent); }
+  .dd-item.checked .chkbox::after { content:""; position:absolute; left:3px; top:0; width:4px; height:8px; border:solid white; border-width:0 2px 2px 0; transform:rotate(45deg); }
+  .dd-search { padding: 6px 8px; }
+  .dd-search input { width:100%; padding: 6px 10px; border-radius:7px; border:1px solid var(--border); background: var(--bg-elev-2); color: var(--text-1); font-size:12px; outline: none; }
+  .dd-search input:focus { border-color: var(--accent); }
+  .dd-list { max-height: 260px; overflow-y: auto; padding: 2px; }
+  .dd-actions { display:flex; gap:4px; padding: 6px; border-top:1px solid var(--border); }
+  .dd-actions button { flex:1; padding: 6px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--text-2); font-size: 12px; font-weight: 500; cursor: pointer; }
+  .dd-actions button:hover { background: var(--bg-hover); color: var(--text-1); }
+  .dd-actions button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* page-level filter bar */
+  .pfilter { display:flex; gap:8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .pfilter .sep { width:1px; height:18px; background: var(--border); margin: 0 4px; }
+
+  .refresh-group {
+    display:flex; align-items:center; gap: 0;
+    border: 1px solid var(--border); border-radius: 9px; overflow:hidden;
+    background: var(--bg-elev-2);
+  }
+  .refresh-group .icon-btn { border-radius: 0; border: none; width: 30px; height: 30px; }
+  .refresh-group select {
+    background: transparent; color: var(--text-1);
+    border: none; outline: none; appearance: none;
+    font-size: 12px; font-weight: 500; padding: 0 8px 0 4px; height: 30px;
+    border-left: 1px solid var(--border);
+  }
+
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #0a84ff, #bf5af2);
+    color:white; font-weight:600; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    background: var(--bg-sidebar);
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border-right: 1px solid var(--border);
+    padding: 14px 12px;
+    overflow-y: auto;
+    position: sticky; top: 56px; align-self: start;
+    height: calc(100vh - 56px);
+    z-index: 5;
+  }
+  .nav-group { margin-bottom: 18px; }
+  .nav-group .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-3); padding: 6px 10px; font-weight: 600;
+  }
+  .nav-item {
+    display:flex; align-items:center; gap: 10px;
+    padding: 8px 10px; margin: 1px 0;
+    border-radius: 8px;
+    color: var(--text-2);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; user-select: none;
+    transition: background .12s, color .12s;
+  }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text-1); }
+  .nav-item.active { background: var(--accent-weak); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; }
+  .nav-item .count { margin-left:auto; font-size: 11px; color: var(--text-3); font-weight:500; background: var(--bg-hover); padding: 1px 7px; border-radius: 6px; }
+  .nav-item.active .count { color: var(--accent); background: var(--accent-weak); }
+
+  /* ===== Cards / typography ===== */
+  h1, h2, h3, h4 { margin: 0; letter-spacing: -0.015em; }
+  .page-title { font-size: 22px; font-weight: 600; }
+  .page-sub { color: var(--text-3); font-size: 13px; margin-top: 2px; }
+
+  .card {
+    background: var(--bg-elev-0);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    padding: 16px;
+  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 10px; display:flex; align-items:center; justify-content:space-between; }
+  .card-title .hint { color: var(--text-3); font-weight: 500; font-size: 11.5px; }
+  .card-title .tabs { display:flex; gap:4px; }
+  .tab { font-size: 11.5px; padding: 3px 8px; border-radius: 6px; color: var(--text-3); cursor:pointer; font-weight:500; }
+  .tab:hover { background: var(--bg-hover); color: var(--text-1); }
+  .tab.active { background: var(--bg-hover); color: var(--text-1); }
+
+  /* ===== KPI ===== */
+  .kpi-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 16px; }
+  .kpi .name { font-size: 12px; color: var(--text-3); font-weight: 500; }
+  .kpi .value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }
+  .kpi .value .unit { font-size: 13px; color: var(--text-3); font-weight: 500; margin-left: 2px; }
+  .kpi .delta { font-size: 11.5px; font-weight: 600; margin-top: 6px; display:inline-flex; align-items:center; gap:3px; }
+  .kpi .delta.up { color: var(--danger); }
+  .kpi .delta.down { color: var(--success); }
+  .kpi .spark { height: 36px; margin-top: 6px; }
+
+  /* ===== Table ===== */
+  table.tbl { width:100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+  .tbl thead th {
+    text-align: left; font-weight: 600; color: var(--text-3);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); background: transparent;
+  }
+  .tbl tbody td {
+    padding: 10px; border-bottom: 1px solid var(--border); color: var(--text-1); vertical-align: middle;
+  }
+  .tbl tbody tr:hover td { background: var(--bg-hover); }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  }
+  .badge.ok { color: var(--success); background: color-mix(in srgb, var(--success) 15%, transparent); }
+  .badge.warn { color: var(--warning); background: color-mix(in srgb, var(--warning) 18%, transparent); }
+  .badge.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+  .badge.info { color: var(--accent); background: var(--accent-weak); }
+  .badge.muted { color: var(--text-2); background: var(--bg-hover); }
+
+  .bar { height: 4px; border-radius: 3px; background: var(--bg-hover); position: relative; overflow: hidden; }
+  .bar > span { position:absolute; top:0; left:0; bottom:0; border-radius: 3px; }
+
+  /* ===== Page switcher ===== */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ===== Overview grid ===== */
+  .grid-2 { display:grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 12px; }
+  .grid-3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+  /* ===== Trace waterfall ===== */
+  .trace-head { display:flex; gap: 8px; align-items:center; margin-top: 14px; margin-bottom: 8px; }
+  .trace-head .meta { color: var(--text-3); font-size: 12px; }
+  .waterfall { margin-top: 6px; }
+  .wf-row { display: grid; grid-template-columns: 280px 1fr 120px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+  .wf-row .svc { display:flex; align-items:center; gap: 8px; }
+  .wf-row .tag { width: 3px; height: 14px; border-radius: 2px; }
+  .wf-row .indent { color: var(--text-3); font-family: "SF Mono", ui-monospace, monospace; font-size: 11px; opacity: .6; }
+  .wf-bar { position: relative; height: 14px; background: var(--bg-hover); border-radius: 3px; overflow:hidden; }
+  .wf-bar > span { position:absolute; top:0; bottom:0; border-radius: 3px; }
+  .wf-row .dur { text-align: right; color: var(--text-2); font-family: "SF Mono", ui-monospace, monospace; }
+
+  /* ===== Topology ===== */
+  .topo-wrap { position: relative; height: 580px; background: linear-gradient(180deg, var(--bg-elev-0) 0%, var(--bg-elev-1) 100%); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+  .topo-wrap .dots { position: absolute; inset: 0; background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 28px 28px; opacity: .5; }
+  .topo-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .topo-legend { position:absolute; top: 12px; right: 12px; display:flex; gap: 6px; z-index: 3; }
+  .topo-legend .chip { background: color-mix(in srgb, var(--bg-elev-1) 70%, transparent); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 11px; color: var(--text-2); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .topo-tiers { position:absolute; inset:0; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; pointer-events:none; }
+  .topo-tier { position:relative; border-right: 1px dashed var(--border); }
+  .topo-tier:last-child { border-right:none; }
+  .topo-tier span { position:absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: var(--text-3); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .55;}
+  .topo-toolbar { position:absolute; top:10px; left:10px; display:inline-flex; gap:2px; z-index:3; background: color-mix(in srgb, var(--bg-elev-1) 70%, transparent); border:1px solid var(--border); border-radius: 10px; padding: 3px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .topo-toolbar .tbtn { background: transparent; border: none; color:var(--text-2); border-radius: 7px; padding: 5px 7px; font-size: 12px; display:inline-flex; align-items:center; gap:4px; cursor:pointer; line-height:1; }
+  .topo-toolbar .tbtn:hover { background: var(--bg-elev-2); color: var(--text-1); }
+  .topo-toolbar .tbtn.active { background: var(--accent-weak); color: var(--accent); }
+  .topo-toolbar .tbtn svg { width:13px; height:13px; }
+  .topo-toolbar .sep { width:1px; background: var(--border); margin: 3px 2px; }
+  .topo-minimap { position:absolute; bottom:12px; right:12px; width: 160px; height: 90px; border:1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--bg-elev-1) 70%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding:6px; z-index:3; }
+  .topo-minimap .mm-view { position:absolute; left:18%; top:22%; width:50%; height:50%; border:1.5px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .topo-side { position:absolute; bottom:12px; left:12px; width: 280px; background: color-mix(in srgb, var(--bg-elev-1) 78%, transparent); border:1px solid var(--border); border-radius: 12px; padding: 12px 14px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); z-index:3; box-shadow: 0 10px 30px color-mix(in srgb, var(--text-1) 8%, transparent); }
+  .topo-side .ts-title { display:flex; align-items:center; gap:8px; font-size: 13px; font-weight:600; }
+  .topo-side .ts-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; font-family: var(--mono); }
+  .topo-side .ts-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .topo-side .ts-k { font-size:10px; color:var(--text-3); text-transform: uppercase; letter-spacing: .08em; }
+  .topo-side .ts-v { font-size:13px; color:var(--text-1); font-weight:600; font-family: var(--mono); margin-top:2px; }
+  .topo-side .ts-v.warn { color: var(--warning); }
+  .topo-side .ts-v.err { color: var(--danger); }
+  .node-hex { cursor:pointer; transition: transform .2s ease; }
+  .node-hex:hover { transform: translateY(-2px); }
+  .edge-flow { stroke-dasharray: 5 6; animation: flow 1.4s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -22; } }
+
+  /* ===== Onboarding / code ===== */
+  .steps { display:grid; grid-template-columns: 220px 1fr; gap: 18px; margin-top: 14px; }
+  .steps .stepnav { display:flex; flex-direction:column; gap: 2px; }
+  .steps .stepnav .s { padding: 10px 12px; border-radius: 10px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; color: var(--text-2); }
+  .steps .stepnav .s:hover { background: var(--bg-hover); color: var(--text-1); }
+  .steps .stepnav .s.active { background: var(--accent-weak); color: var(--accent); }
+  .steps .stepnav .num { width:20px; height:20px; border-radius:50%; background: var(--bg-hover); color: var(--text-2); font-size: 11px; font-weight: 700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .steps .stepnav .s.active .num { background: var(--accent); color:white; }
+  .steps .stepnav .s .ttl { font-size: 13px; font-weight: 600; }
+  .steps .stepnav .s .sub { font-size: 11.5px; color: var(--text-3); margin-top:2px; font-weight: 500; }
+  .steps .stepnav .s.active .sub { color: color-mix(in srgb, var(--accent) 70%, var(--text-2)); }
+
+  .lang-tabs { display:flex; gap: 6px; margin-bottom: 10px; }
+  .lang-tabs .lt { padding: 5px 10px; font-size: 12px; border-radius: 8px; cursor:pointer; color: var(--text-3); font-weight: 500; }
+  .lang-tabs .lt:hover { background: var(--bg-hover); color: var(--text-1); }
+  .lang-tabs .lt.active { background: var(--bg-hover); color: var(--text-1); font-weight: 600; }
+
+  pre.code {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--text-1);
+    overflow-x: auto;
+    position: relative;
+  }
+  .code .kw { color: var(--purple); font-weight: 600; }
+  .code .st { color: var(--success); }
+  .code .num { color: var(--warning); }
+  .code .fn { color: var(--accent); }
+  .code .cm { color: var(--text-3); font-style: italic; }
+
+  .copy { position: absolute; top: 10px; right: 10px; font-size: 11px; color: var(--text-3); background: var(--bg-elev-0); border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; cursor: pointer; font-weight: 500; }
+  .copy:hover { color: var(--text-1); }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-3); border: 2px solid transparent; background-clip: padding-box; }
+
+  /* Progress ring */
+  .ring { transform: rotate(-90deg); }
+  .ring .track { stroke: var(--bg-hover); }
+  .ring .fill { stroke: var(--accent); stroke-linecap: round; }
+
+  /* Runtime tabs (Application Monitoring) */
+  .rt-tabs { flex-wrap: wrap; }
+  .rt-tab {
+    flex: 1 1 0; min-width: 180px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    background: transparent; border: 1px solid transparent;
+    cursor: pointer; transition: all .15s;
+  }
+  .rt-tab:hover { background: var(--bg-hover); }
+  .rt-tab.active { background: var(--bg-elev-2); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .rt-tab .rt-ico {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 13px; font-family: -apple-system;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
+  }
+  .rt-tab .rt-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
+  .rt-tab .rt-ver { font-size: 11px; color: var(--text-3); font-weight: 500; margin-top: 1px; }
+
+  /* Service heat rows */
+  .svc-row { display:grid; grid-template-columns: 22px 1fr 60px 60px 60px 80px; gap:10px; align-items:center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size:12.5px; }
+  .svc-row:last-child { border: none; }
+  .svc-row .sq { width: 14px; height: 14px; border-radius: 4px; }
+  .svc-row .nm { font-weight: 600; }
+  .svc-row .rt { color: var(--text-2); font-variant-numeric: tabular-nums; font-family: "SF Mono", ui-monospace, monospace; font-size: 12px; text-align:right; }
+
+  .section-h { display:flex; align-items:center; justify-content: space-between; margin-top: 18px; margin-bottom: 10px; }
+  .section-h h3 { font-size: 15px; font-weight: 600; }
+  .section-h .right { color: var(--text-3); font-size: 12px; }
+
+  /* tiny pulse on refresh */
+  @keyframes pulse { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+  .spin { animation: pulse 2.2s linear infinite; }
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" title="啄木鸟 2.0">
+        <!-- Woodpecker glyph: profile facing right, with crest, beak, and body -->
+        <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+          <g fill="#ffffff">
+            <!-- Crest: three upward tufts -->
+            <path d="M11.2 3.2 L10 7.4 L13.2 5.8 Z"/>
+            <path d="M13.6 2.4 L13.2 7.2 L16.4 5.2 Z"/>
+            <path d="M16.2 3.4 L16 7.8 L18.6 6.6 Z"/>
+            <!-- Head (round) -->
+            <circle cx="14.6" cy="11.2" r="4.8"/>
+            <!-- Beak: sharp triangle pointing right -->
+            <path d="M18.4 10.6 L29 11.8 L18.4 13.6 Z"/>
+            <!-- Body (elongated, leaning down-right) -->
+            <path d="M11.6 14 C 8.6 16, 8 20, 10 24 C 12 27, 16 27, 18 24.5 C 20 22, 19 18, 16.8 15.6 Z"/>
+            <!-- Tail hint -->
+            <path d="M9.2 22 L5.4 26 L10.4 25 Z"/>
+          </g>
+          <!-- Eye -->
+          <circle cx="15.8" cy="10.6" r="1.1" fill="#1d1d1f"/>
+          <!-- Pecking marks (tiny) -->
+          <g fill="#ffffff" opacity="0.55">
+            <rect x="25" y="14.5" width="3" height="1.2" rx="0.6"/>
+            <rect x="26" y="17" width="2.2" height="1.2" rx="0.6"/>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <div class="name">啄木鸟 <span class="sub">2.0</span></div>
+      </div>
+    </div>
+
+    <!-- Global filter pills -->
+    <div class="filters">
+      <div class="dd" id="projDD">
+        <button class="pill" onclick="toggleDD('projDD', event)" title="项目">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+          <span class="k">项目</span><span class="v" id="projDDLabel">eshop</span>
+          <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dd-menu" style="min-width: 280px;">
+          <div class="dd-search"><input id="projSearchInput" placeholder="搜索项目名..." oninput="filterProj(this)" autocomplete="off"></div>
+          <div class="dd-sep"></div>
+          <div class="dd-section">最近使用</div>
+          <div id="projDDList">
+            <div class="dd-item selected" data-proj="eshop" onclick="pickProj(this, 'eshop')"><span><span class="env-dot" style="background:var(--accent);"></span>eshop</span><span class="kbd">电商</span></div>
+            <div class="dd-item" data-proj="hr" onclick="pickProj(this, 'hr')"><span><span class="env-dot" style="background:var(--success);"></span>hr</span><span class="kbd">人力</span></div>
+            <div class="dd-item" data-proj="crm" onclick="pickProj(this, 'crm')"><span><span class="env-dot" style="background:var(--warning);"></span>crm</span><span class="kbd">客户</span></div>
+            <div class="dd-sep"></div>
+            <div class="dd-section">全部项目</div>
+            <div class="dd-item" data-proj="oa" onclick="pickProj(this, 'oa')"><span><span class="env-dot" style="background:var(--teal);"></span>oa</span><span class="kbd">办公</span></div>
+            <div class="dd-item" data-proj="finance" onclick="pickProj(this, 'finance')"><span><span class="env-dot" style="background:var(--purple);"></span>finance</span><span class="kbd">财务</span></div>
+            <div class="dd-item" data-proj="erp" onclick="pickProj(this, 'erp')"><span><span class="env-dot" style="background:var(--accent);"></span>erp</span><span class="kbd">ERP</span></div>
+            <div class="dd-item" data-proj="wms" onclick="pickProj(this, 'wms')"><span><span class="env-dot" style="background:var(--teal);"></span>wms</span><span class="kbd">仓储</span></div>
+            <div class="dd-item" data-proj="mes" onclick="pickProj(this, 'mes')"><span><span class="env-dot" style="background:var(--warning);"></span>mes</span><span class="kbd">制造</span></div>
+            <div class="dd-item" data-proj="bi" onclick="pickProj(this, 'bi')"><span><span class="env-dot" style="background:var(--success);"></span>bi</span><span class="kbd">数据</span></div>
+            <div class="dd-item" data-proj="marketing" onclick="pickProj(this, 'marketing')"><span><span class="env-dot" style="background:var(--accent);"></span>marketing</span><span class="kbd">营销</span></div>
+            <div class="dd-item" data-proj="portal" onclick="pickProj(this, 'portal')"><span><span class="env-dot" style="background:var(--text-3);"></span>portal</span><span class="kbd">门户</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="right">
+      <!-- Environment dropdown (placed next to Time per request) -->
+      <div class="dd" id="envDD">
+        <button class="pill" onclick="toggleDD('envDD', event)" title="环境">
+          <span class="dot" id="envDot"></span>
+          <span class="k">环境</span><span class="v" id="envDDLabel">Production</span>
+          <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dd-menu" style="min-width: 200px;">
+          <div class="dd-section">部署环境</div>
+          <div class="dd-item selected" onclick="pickEnv(this, 'Production', 'var(--success)')"><span><span class="env-dot" style="background:var(--success);"></span>Production</span><span class="kbd">prod</span></div>
+          <div class="dd-item" onclick="pickEnv(this, 'Staging', 'var(--warning)')"><span><span class="env-dot" style="background:var(--warning);"></span>Staging</span><span class="kbd">stg</span></div>
+          <div class="dd-item" onclick="pickEnv(this, 'Pre-Production', 'var(--accent)')"><span><span class="env-dot" style="background:var(--accent);"></span>Pre-Production</span><span class="kbd">pre</span></div>
+          <div class="dd-item" onclick="pickEnv(this, 'Development', 'var(--purple)')"><span><span class="env-dot" style="background:var(--purple);"></span>Development</span><span class="kbd">dev</span></div>
+          <div class="dd-item" onclick="pickEnv(this, 'Testing', 'var(--teal)')"><span><span class="env-dot" style="background:var(--teal);"></span>Testing</span><span class="kbd">test</span></div>
+          <div class="dd-sep"></div>
+          <div class="dd-item" onclick="pickEnv(this, '全部环境', 'var(--text-3)')"><span>全部环境</span></div>
+        </div>
+      </div>
+
+      <!-- Time range dropdown -->
+      <div class="dd" id="timeDD">
+        <button class="pill" onclick="toggleDD('timeDD', event)" title="时间范围">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <span class="k">时间</span><span class="v" id="timeDDLabel">Last 1h</span>
+          <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dd-menu">
+          <div class="dd-item" onclick="pickTime(this, 'Last 15m')"><span>最近 15 分钟</span><span class="kbd">15m</span></div>
+          <div class="dd-item selected" onclick="pickTime(this, 'Last 1h')"><span>最近 1 小时</span><span class="kbd">1h</span></div>
+          <div class="dd-item" onclick="pickTime(this, 'Last 6h')"><span>最近 6 小时</span><span class="kbd">6h</span></div>
+          <div class="dd-item" onclick="pickTime(this, 'Last 24h')"><span>最近 24 小时</span><span class="kbd">24h</span></div>
+        </div>
+      </div>
+
+      <!-- Auto refresh -->
+      <div class="refresh-group" title="自动刷新">
+        <button class="icon-btn" onclick="manualRefresh(this)" title="立即刷新">
+          <svg id="refreshIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        </button>
+        <select id="autoRefresh" title="自动刷新间隔">
+          <option>关闭</option>
+          <option selected>30s</option>
+        </select>
+      </div>
+
+      <!-- Theme toggle -->
+      <button class="icon-btn theme-btn" id="themeBtn" onclick="toggleTheme()" title="主题切换 (黑/白)">
+        <svg class="theme-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+        </svg>
+        <svg class="theme-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="nav-group">
+      <div class="label">监控</div>
+      <div class="nav-item active" data-page="traces" onclick="go(this)">
+        <span class="ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="4" cy="6" r="2"/><circle cx="20" cy="18" r="2"/><path d="M6 6h6a4 4 0 014 4v4a4 4 0 004 4"/></svg>
+        </span>
+        调用链 Traces
+      </div>
+      <div class="nav-item" data-page="metrics" onclick="go(this)">
+        <span class="ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+        </span>
+        指标 Metrics
+      </div>
+      <div class="nav-item" data-page="topology" onclick="go(this)">
+        <span class="ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M9 6h6M7.5 8.5L10 15.5M16.5 8.5L14 15.5"/></svg>
+        </span>
+        拓扑 Topology
+      </div>
+      <div class="nav-item" data-page="apm" onclick="go(this)">
+        <span class="ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8l2 2-2 2M11 12h4" stroke-linecap="round"/></svg>
+        </span>
+        运行时 Runtime
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="label">设置</div>
+      <div class="nav-item" data-page="onboarding" onclick="go(this)">
+        <span class="ico">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-6 4 2 8-6-4-6 4 2-8-6-4h7z"/></svg>
+        </span>
+        接入指导
+      </div>
+      <div class="nav-item" data-page="onboarding">
+        <span class="ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
+        系统设置
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- ============================ TRACES ============================ -->
+    <section class="page active" id="page-traces">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between;">
+        <div>
+          <div class="page-title">调用链 Traces</div>
+          <div class="page-sub">基于 OpenTelemetry 分布式追踪 · 共 12,418 trace 匹配当前筛选条件</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="pill" style="background: var(--accent); color:white; border-color:var(--accent);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            保存查询
+          </button>
+        </div>
+      </div>
+
+      <!-- page-level filters -->
+      <div class="pfilter">
+        <!-- Service multi-select -->
+        <div class="dd" id="svcDDTraces">
+          <button class="pill" onclick="toggleDD('svcDDTraces', event)" title="服务过滤">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span class="k">服务</span><span class="v" id="svcDDTracesLabel">全部 (9)</span>
+            <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dd-menu" style="min-width: 280px;">
+            <div class="dd-section">选择服务 · 可多选</div>
+            <div class="dd-search"><input placeholder="搜索服务名..." oninput="filterSvc(this, 'svcDDTracesList')"></div>
+            <div class="dd-list" id="svcDDTracesList">
+              <div class="dd-item checked" data-svc="gateway" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>gateway</span><span class="kbd mono">4.8k rpm</span></div>
+              <div class="dd-item checked" data-svc="checkout-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>checkout-service</span><span class="kbd mono">1.2k rpm</span></div>
+              <div class="dd-item checked" data-svc="payment-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>payment-service</span><span class="kbd mono">820</span></div>
+              <div class="dd-item checked" data-svc="risk-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>risk-service</span><span class="kbd mono">640</span></div>
+              <div class="dd-item checked" data-svc="order-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>order-service</span><span class="kbd mono">520</span></div>
+              <div class="dd-item checked" data-svc="notify-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>notify-service</span><span class="kbd mono">410</span></div>
+              <div class="dd-item checked" data-svc="user-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>user-service</span><span class="kbd mono">380</span></div>
+              <div class="dd-item checked" data-svc="auth-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>auth-service</span><span class="kbd mono">240</span></div>
+              <div class="dd-item checked" data-svc="ledger-service" onclick="toggleSvc(this, 'svcDDTraces')"><span><span class="chkbox"></span>ledger-service</span><span class="kbd mono">180</span></div>
+            </div>
+            <div class="dd-actions">
+              <button onclick="setAllSvc('svcDDTraces', true)">全选</button>
+              <button onclick="setAllSvc('svcDDTraces', false)">清除</button>
+              <button class="primary" onclick="toggleDD('svcDDTraces', event)">应用</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status filter -->
+        <div class="dd" id="statusDDTraces">
+          <button class="pill" onclick="toggleDD('statusDDTraces', event)" title="状态">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+            <span class="k">状态</span><span class="v">全部</span>
+            <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dd-menu" style="min-width: 180px;">
+            <div class="dd-item selected"><span>全部</span></div>
+            <div class="dd-item"><span><span class="env-dot" style="background:var(--success);"></span>成功 2xx</span></div>
+            <div class="dd-item"><span><span class="env-dot" style="background:var(--warning);"></span>客户端错误 4xx</span></div>
+            <div class="dd-item"><span><span class="env-dot" style="background:var(--danger);"></span>服务端错误 5xx</span></div>
+            <div class="dd-item"><span>仅异常 (Error)</span></div>
+          </div>
+        </div>
+
+        <!-- Duration filter -->
+        <div class="dd" id="durDDTraces">
+          <button class="pill" onclick="toggleDD('durDDTraces', event)" title="延迟">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.8 2.8M16.2 16.2L19 19M5 19l2.8-2.8M16.2 7.8L19 5"/></svg>
+            <span class="k">延迟</span><span class="v">任意</span>
+            <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dd-menu" style="min-width: 180px;">
+            <div class="dd-item selected"><span>任意延迟</span></div>
+            <div class="dd-item"><span>&gt; 100 ms</span></div>
+            <div class="dd-item"><span>&gt; 500 ms</span></div>
+            <div class="dd-item"><span>&gt; 1 s</span></div>
+            <div class="dd-item"><span>&gt; 3 s</span></div>
+            <div class="dd-item"><span>自定义…</span></div>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+        <span style="color:var(--text-3); font-size:12px;">已匹配 <strong style="color:var(--text-1)">12,418</strong> traces</span>
+      </div>
+
+      <!-- search -->
+      <div class="card" style="margin-top:14px; padding:10px 12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input placeholder="service.name=&quot;payment&quot; AND http.status_code&gt;=500 AND duration&gt;500ms" style="flex:1; border:none; background:transparent; outline:none; color:var(--text-1); font-family:'SF Mono',monospace; font-size:12.5px;">
+          <span class="badge info">TraceQL</span>
+        </div>
+      </div>
+
+      <!-- duration histogram -->
+      <div class="card" style="margin-top:12px;">
+        <div class="card-title">
+          <span>延迟分布 <span class="hint">· 点击区间筛选</span></span>
+          <div class="tabs"><span class="tab active">直方图</span><span class="tab">热力图</span></div>
+        </div>
+        <svg viewBox="0 0 620 140" width="100%" height="140">
+          <g>
+            <!-- bars -->
+            <g fill="var(--accent)" opacity=".85">
+              <rect x="10" y="80" width="14" height="45"/>
+              <rect x="28" y="50" width="14" height="75"/>
+              <rect x="46" y="30" width="14" height="95"/>
+              <rect x="64" y="20" width="14" height="105"/>
+              <rect x="82" y="35" width="14" height="90"/>
+              <rect x="100" y="48" width="14" height="77"/>
+              <rect x="118" y="60" width="14" height="65"/>
+              <rect x="136" y="72" width="14" height="53"/>
+              <rect x="154" y="82" width="14" height="43"/>
+              <rect x="172" y="90" width="14" height="35"/>
+              <rect x="190" y="96" width="14" height="29"/>
+              <rect x="208" y="100" width="14" height="25"/>
+              <rect x="226" y="104" width="14" height="21"/>
+              <rect x="244" y="107" width="14" height="18"/>
+              <rect x="262" y="110" width="14" height="15"/>
+              <rect x="280" y="112" width="14" height="13"/>
+              <rect x="298" y="113" width="14" height="12"/>
+              <rect x="316" y="114" width="14" height="11"/>
+              <rect x="334" y="115" width="14" height="10"/>
+              <rect x="352" y="115" width="14" height="10"/>
+              <rect x="370" y="116" width="14" height="9"/>
+              <rect x="388" y="116" width="14" height="9"/>
+              <rect x="406" y="117" width="14" height="8"/>
+              <rect x="424" y="117" width="14" height="8"/>
+              <rect x="442" y="118" width="14" height="7"/>
+            </g>
+            <!-- errors overlay -->
+            <g fill="var(--danger)" opacity=".85">
+              <rect x="460" y="115" width="14" height="10"/>
+              <rect x="478" y="112" width="14" height="13"/>
+              <rect x="496" y="108" width="14" height="17"/>
+              <rect x="514" y="106" width="14" height="19"/>
+              <rect x="532" y="104" width="14" height="21"/>
+              <rect x="550" y="102" width="14" height="23"/>
+              <rect x="568" y="108" width="14" height="17"/>
+              <rect x="586" y="114" width="14" height="11"/>
+            </g>
+            <!-- P95 marker -->
+            <line x1="230" y1="10" x2="230" y2="125" stroke="var(--warning)" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <text x="233" y="18" fill="var(--warning)" font-size="10.5" font-family="SF Mono">P95 312ms</text>
+            <g font-size="10" fill="var(--text-3)" font-family="SF Mono">
+              <text x="10" y="138">0</text>
+              <text x="150" y="138">250ms</text>
+              <text x="295" y="138">500ms</text>
+              <text x="440" y="138">1s</text>
+              <text x="570" y="138">2s+</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <!-- trace list -->
+      <div class="card" style="margin-top:12px; padding: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="padding-left:16px;">Trace ID</th>
+              <th>根 Span</th>
+              <th>服务</th>
+              <th>状态</th>
+              <th>延迟</th>
+              <th>Spans</th>
+              <th style="padding-right:16px;">时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="showTrace()" style="cursor:pointer; background: var(--accent-weak);">
+              <td style="padding-left:16px;" class="mono">4f2c9a...b801</td>
+              <td><strong>POST /checkout</strong></td>
+              <td>checkout-service</td>
+              <td><span class="badge err">500</span></td>
+              <td class="mono">1.82s</td>
+              <td>47</td>
+              <td style="padding-right:16px; color:var(--text-3);" class="mono">18:36:04</td>
+            </tr>
+            <tr><td style="padding-left:16px;" class="mono">a91d2e...7cf2</td><td>POST /pay/card</td><td>payment-service</td><td><span class="badge ok">200</span></td><td class="mono">760ms</td><td>32</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:36:02</td></tr>
+            <tr><td style="padding-left:16px;" class="mono">c7810b...44d1</td><td>GET /orders/o_8172</td><td>order-service</td><td><span class="badge ok">200</span></td><td class="mono">318ms</td><td>18</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:36:01</td></tr>
+            <tr><td style="padding-left:16px;" class="mono">e28f41...9a20</td><td>POST /risk/score</td><td>risk-service</td><td><span class="badge warn">slow</span></td><td class="mono">1.12s</td><td>24</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:35:58</td></tr>
+            <tr><td style="padding-left:16px;" class="mono">88d730...0156</td><td>GET /user/profile</td><td>user-service</td><td><span class="badge ok">200</span></td><td class="mono">88ms</td><td>9</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:35:57</td></tr>
+            <tr><td style="padding-left:16px;" class="mono">f6b222...e1a8</td><td>POST /notify/sms</td><td>notify-service</td><td><span class="badge ok">200</span></td><td class="mono">212ms</td><td>14</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:35:55</td></tr>
+            <tr><td style="padding-left:16px;" class="mono">1d0c55...77b3</td><td>POST /ledger/write</td><td>ledger-service</td><td><span class="badge err">500</span></td><td class="mono">604ms</td><td>21</td><td style="padding-right:16px; color:var(--text-3);" class="mono">18:35:52</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- trace detail: waterfall -->
+      <div class="section-h">
+        <h3>Trace 详情 · <span class="mono" style="color:var(--text-3); font-weight:500;">4f2c9a...b801</span></h3>
+        <div class="right">47 spans · 6 服务 · 1.82s · <span style="color:var(--danger); font-weight:600;">● ERROR</span></div>
+      </div>
+
+      <div class="card">
+        <div class="waterfall">
+          <div class="wf-row" style="font-weight:600; color:var(--text-3); font-size:11px; text-transform:uppercase; letter-spacing:.05em;">
+            <div>服务 / Span</div><div>时间线 0ms — 1,820ms</div><div style="text-align:right;">Duration</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="tag" style="background:var(--accent)"></span><strong>checkout-service</strong> · POST /checkout</div>
+            <div class="wf-bar"><span style="left:0%; width:100%; background:var(--accent);"></span></div>
+            <div class="dur">1,820ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">└─</span><span class="tag" style="background:var(--purple)"></span>auth-service · verifyToken</div>
+            <div class="wf-bar"><span style="left:1%; width:4%; background:var(--purple);"></span></div>
+            <div class="dur">68ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">└─</span><span class="tag" style="background:var(--teal)"></span>user-service · GET /profile</div>
+            <div class="wf-bar"><span style="left:5%; width:6%; background:var(--teal);"></span></div>
+            <div class="dur">108ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">└─</span><span class="tag" style="background:var(--warning)"></span>risk-service · POST /score</div>
+            <div class="wf-bar"><span style="left:11%; width:44%; background:var(--warning);"></span></div>
+            <div class="dur">800ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">  └─</span><span class="tag" style="background:var(--pink)"></span>redis · GET risk:cache</div>
+            <div class="wf-bar"><span style="left:12%; width:2%; background:var(--pink);"></span></div>
+            <div class="dur">32ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">  └─</span><span class="tag" style="background:var(--purple)"></span>mysql · SELECT risk_profile</div>
+            <div class="wf-bar"><span style="left:15%; width:38%; background:var(--purple);"></span></div>
+            <div class="dur">692ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">└─</span><span class="tag" style="background:var(--success)"></span>payment-service · POST /pay/card</div>
+            <div class="wf-bar"><span style="left:55%; width:22%; background:var(--success);"></span></div>
+            <div class="dur">400ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">  └─</span><span class="tag" style="background:var(--accent)"></span>external · stripe.com/charges</div>
+            <div class="wf-bar"><span style="left:57%; width:18%; background:var(--accent);"></span></div>
+            <div class="dur">326ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">└─</span><span class="tag" style="background:var(--danger)"></span>ledger-service · POST /write <span class="badge err" style="margin-left:6px;">ERROR</span></div>
+            <div class="wf-bar"><span style="left:78%; width:22%; background:var(--danger);"></span></div>
+            <div class="dur">400ms</div>
+          </div>
+          <div class="wf-row">
+            <div class="svc"><span class="indent">  └─</span><span class="tag" style="background:var(--purple)"></span>mysql · INSERT ledger</div>
+            <div class="wf-bar"><span style="left:80%; width:18%; background:var(--purple);"></span></div>
+            <div class="dur">328ms</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding:12px; border-radius:10px; background:var(--bg-elev-2);">
+            <div style="font-size:11px; color:var(--text-3); font-weight:600; text-transform:uppercase; letter-spacing:.05em;">Span 属性</div>
+            <div class="mono" style="font-size:11.5px; color:var(--text-2); line-height:1.9; margin-top:6px;">
+              http.method = <span style="color:var(--success)">"POST"</span><br>
+              http.route = <span style="color:var(--success)">"/checkout"</span><br>
+              http.status_code = <span style="color:var(--warning)">500</span><br>
+              user.id = <span style="color:var(--success)">"u_2813"</span><br>
+              order.amount = <span style="color:var(--warning)">159.00</span><br>
+              tenant = <span style="color:var(--success)">"cn-east"</span>
+            </div>
+          </div>
+          <div style="padding:12px; border-radius:10px; background: color-mix(in srgb, var(--danger) 8%, transparent); border:1px solid color-mix(in srgb, var(--danger) 20%, transparent);">
+            <div style="font-size:11px; color:var(--danger); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">异常 Event</div>
+            <div style="font-weight:600; margin-top:4px;">SQLIntegrityConstraintViolationException</div>
+            <div class="mono" style="font-size:11.5px; color:var(--text-2); margin-top:4px; line-height:1.7;">at LedgerDAO.insert(LedgerDAO.java:87)<br>at LedgerService.write(LedgerService.java:42)<br>at LedgerController.post(LedgerController.java:28)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ METRICS ============================ -->
+    <section class="page" id="page-metrics">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between;">
+        <div>
+          <div class="page-title">指标 Metrics</div>
+          <div class="page-sub">RED 方法论 · 吞吐 / 错误 / 延迟</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <div class="dd" id="svcDDMetrics">
+            <button class="pill" onclick="toggleDD('svcDDMetrics', event)">
+              <span class="k">服务</span><span class="v" id="svcDDMetricsLabel">payment-service</span>
+              <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dd-menu" style="min-width: 220px;">
+              <div class="dd-item" onclick="pickSvcMetrics(this,'gateway')"><span>gateway</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'checkout-service')"><span>checkout-service</span></div>
+              <div class="dd-item selected" onclick="pickSvcMetrics(this,'payment-service')"><span>payment-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'risk-service')"><span>risk-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'order-service')"><span>order-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'notify-service')"><span>notify-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'user-service')"><span>user-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'auth-service')"><span>auth-service</span></div>
+              <div class="dd-item" onclick="pickSvcMetrics(this,'ledger-service')"><span>ledger-service</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-3" style="grid-template-columns: 1fr 1fr;">
+        <div class="card">
+          <div class="card-title"><span>请求吞吐 (rpm)</span><span class="hint">by service</span></div>
+          <svg viewBox="0 0 520 200" width="100%" height="200">
+            <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="520" y2="40"/><line x1="30" y1="90" x2="520" y2="90"/><line x1="30" y1="140" x2="520" y2="140"/></g>
+            <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="44">2k</text><text x="4" y="94">1k</text><text x="4" y="144">500</text></g>
+            <path d="M30 130 L70 120 L110 128 L150 110 L190 118 L230 100 L270 106 L310 90 L350 94 L390 82 L430 86 L470 72 L520 78" fill="none" stroke="#0a84ff" stroke-width="1.8"/>
+            <path d="M30 150 L70 146 L110 152 L150 140 L190 144 L230 132 L270 136 L310 124 L350 128 L390 118 L430 120 L470 110 L520 114" fill="none" stroke="#bf5af2" stroke-width="1.8"/>
+            <path d="M30 160 L70 158 L110 162 L150 154 L190 156 L230 148 L270 150 L310 142 L350 144 L390 138 L430 140 L470 132 L520 134" fill="none" stroke="#30d158" stroke-width="1.8"/>
+            <path d="M30 172 L70 170 L110 174 L150 168 L190 170 L230 162 L270 164 L310 158 L350 160 L390 156 L430 158 L470 152 L520 154" fill="none" stroke="#ff9f0a" stroke-width="1.8"/>
+          </svg>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; font-size:11.5px; color:var(--text-2);">
+            <span><span style="display:inline-block;width:10px;height:3px;background:#0a84ff;margin-right:4px;vertical-align:middle;"></span>checkout 1,230</span>
+            <span><span style="display:inline-block;width:10px;height:3px;background:#bf5af2;margin-right:4px;vertical-align:middle;"></span>payment 820</span>
+            <span><span style="display:inline-block;width:10px;height:3px;background:#30d158;margin-right:4px;vertical-align:middle;"></span>risk 640</span>
+            <span><span style="display:inline-block;width:10px;height:3px;background:#ff9f0a;margin-right:4px;vertical-align:middle;"></span>notify 410</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>延迟 P50 / P95 / P99</span><span class="hint">ms</span></div>
+          <svg viewBox="0 0 520 200" width="100%" height="200">
+            <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="520" y2="40"/><line x1="30" y1="90" x2="520" y2="90"/><line x1="30" y1="140" x2="520" y2="140"/></g>
+            <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="44">800</text><text x="4" y="94">500</text><text x="4" y="144">200</text></g>
+            <defs><linearGradient id="gM" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff453a" stop-opacity=".3"/><stop offset="1" stop-color="#ff453a" stop-opacity="0"/></linearGradient></defs>
+            <path d="M30 60 L70 72 L110 58 L150 80 L190 64 L230 50 L270 66 L310 44 L350 58 L390 40 L430 56 L470 38 L520 48 L520 180 L30 180 Z" fill="url(#gM)"/>
+            <path d="M30 60 L70 72 L110 58 L150 80 L190 64 L230 50 L270 66 L310 44 L350 58 L390 40 L430 56 L470 38 L520 48" fill="none" stroke="#ff453a" stroke-width="1.8"/>
+            <path d="M30 110 L70 118 L110 108 L150 120 L190 112 L230 102 L270 116 L310 96 L350 108 L390 92 L430 106 L470 88 L520 98" fill="none" stroke="#ff9f0a" stroke-width="1.8"/>
+            <path d="M30 160 L70 162 L110 158 L150 164 L190 160 L230 156 L270 162 L310 154 L350 158 L390 152 L430 158 L470 150 L520 156" fill="none" stroke="#0a84ff" stroke-width="1.8"/>
+          </svg>
+          <div style="display:flex; gap:14px; margin-top:8px; font-size:11.5px; color:var(--text-2);">
+            <span><span style="display:inline-block;width:10px;height:3px;background:#ff453a;margin-right:4px;vertical-align:middle;"></span>P99 620ms</span>
+            <span><span style="display:inline-block;width:10px;height:3px;background:#ff9f0a;margin-right:4px;vertical-align:middle;"></span>P95 312ms</span>
+            <span><span style="display:inline-block;width:10px;height:3px;background:#0a84ff;margin-right:4px;vertical-align:middle;"></span>P50 98ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-3" style="grid-template-columns: 1fr;">
+        <div class="card">
+          <div class="card-title"><span>HTTP 状态码分布</span><span class="hint">5m</span></div>
+          <div style="display:grid; grid-template-columns: 240px 1fr; gap:20px; align-items:center;">
+          <svg viewBox="0 0 200 200" width="100%" height="200">
+            <circle cx="100" cy="100" r="70" fill="none" stroke="var(--bg-hover)" stroke-width="20"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#30d158" stroke-width="20" stroke-dasharray="330 440" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#0a84ff" stroke-width="20" stroke-dasharray="60 440" stroke-dashoffset="-330" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#ff9f0a" stroke-width="20" stroke-dasharray="32 440" stroke-dashoffset="-390" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#ff453a" stroke-width="20" stroke-dasharray="18 440" stroke-dashoffset="-422" transform="rotate(-90 100 100)"/>
+            <text x="100" y="96" text-anchor="middle" font-size="26" font-weight="700" fill="var(--text-1)" font-family="-apple-system">99.58%</text>
+            <text x="100" y="116" text-anchor="middle" font-size="11" fill="var(--text-3)" font-family="-apple-system">成功率</text>
+          </svg>
+          <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#30d158;border-radius:2px;margin-right:6px;"></span>2xx</span><span class="mono">75.0%</span></div>
+            <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#0a84ff;border-radius:2px;margin-right:6px;"></span>3xx</span><span class="mono">13.6%</span></div>
+            <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#ff9f0a;border-radius:2px;margin-right:6px;"></span>4xx</span><span class="mono">7.3%</span></div>
+            <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#ff453a;border-radius:2px;margin-right:6px;"></span>5xx</span><span class="mono">4.1%</span></div>
+          </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============================ TOPOLOGY (MVP · minimal) ============================ -->
+    <section class="page" id="page-topology">
+      <div>
+        <div class="page-title">拓扑 Topology</div>
+        <div class="page-sub">服务依赖图 · 线宽 = 吞吐 · 颜色 = 错误率</div>
+      </div>
+
+      <div class="topo-wrap" style="margin-top: 14px;">
+        <div class="dots"></div>
+
+        <div class="topo-legend">
+          <span class="chip"><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--success); margin-right:6px; vertical-align: middle;"></span>健康</span>
+          <span class="chip"><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--warning); margin-right:6px; vertical-align: middle;"></span>告警</span>
+          <span class="chip"><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--danger); margin-right:6px; vertical-align: middle;"></span>异常</span>
+        </div>
+
+        <svg class="topo-svg" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--text-3)" opacity=".7"/></marker>
+            <marker id="arrowW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--warning)"/></marker>
+            <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--danger)"/></marker>
+          </defs>
+
+          <g fill="none" stroke-linecap="round">
+            <path d="M180 260 C 240 260, 280 260, 345 260" stroke="var(--text-3)" stroke-width="6" opacity=".55" marker-end="url(#arrow)"/>
+            <path d="M470 260 C 560 220, 600 200, 680 180" stroke="var(--text-3)" stroke-width="4" opacity=".55" marker-end="url(#arrow)"/>
+            <path d="M470 260 C 560 260, 600 260, 680 260" stroke="var(--text-3)" stroke-width="3.5" opacity=".55" marker-end="url(#arrow)"/>
+            <path d="M470 260 C 560 300, 600 320, 680 340" stroke="var(--warning)" stroke-width="3" opacity=".75" marker-end="url(#arrowW)"/>
+            <path d="M470 260 C 560 360, 600 400, 680 420" stroke="var(--danger)" stroke-width="2.5" opacity=".85" marker-end="url(#arrowR)"/>
+            <path d="M805 260 C 870 230, 910 200, 965 180" stroke="var(--text-3)" stroke-width="2.5" opacity=".55" marker-end="url(#arrow)"/>
+            <path d="M805 260 C 870 260, 910 260, 965 260" stroke="var(--text-3)" stroke-width="2.5" opacity=".55" marker-end="url(#arrow)"/>
+            <path d="M805 340 C 870 320, 910 280, 965 270" stroke="var(--warning)" stroke-width="2.5" opacity=".7" marker-end="url(#arrowW)"/>
+          </g>
+
+          <g>
+            <rect x="85" y="232" width="95" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--border-strong)" stroke-width="1"/>
+            <text x="132" y="260" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)" font-family="-apple-system">Client</text>
+            <text x="132" y="276" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">4.8K rpm</text>
+          </g>
+          <g>
+            <rect x="350" y="232" width="120" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--success)" stroke-width="1.3"/>
+            <circle cx="362" cy="246" r="3.5" fill="var(--success)"/>
+            <text x="410" y="260" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">gateway</text>
+            <text x="410" y="276" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">4.8K · 28ms</text>
+          </g>
+          <g>
+            <rect x="680" y="152" width="125" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--success)" stroke-width="1.3"/>
+            <circle cx="692" cy="166" r="3.5" fill="var(--success)"/>
+            <text x="742" y="180" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">checkout</text>
+            <text x="742" y="196" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">1.2K · 180ms</text>
+          </g>
+          <g>
+            <rect x="680" y="232" width="125" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--success)" stroke-width="1.3"/>
+            <circle cx="692" cy="246" r="3.5" fill="var(--success)"/>
+            <text x="742" y="260" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">payment</text>
+            <text x="742" y="276" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">820 · 320ms</text>
+          </g>
+          <g>
+            <rect x="680" y="312" width="125" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--warning)" stroke-width="1.3"/>
+            <circle cx="692" cy="326" r="3.5" fill="var(--warning)"/>
+            <text x="742" y="340" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">risk</text>
+            <text x="742" y="356" text-anchor="middle" font-size="10" fill="var(--warning)" font-family="SF Mono">640 · 820ms</text>
+          </g>
+          <g>
+            <rect x="680" y="392" width="125" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--danger)" stroke-width="1.3"/>
+            <circle cx="692" cy="406" r="3.5" fill="var(--danger)"/>
+            <text x="742" y="420" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">ledger</text>
+            <text x="742" y="436" text-anchor="middle" font-size="10" fill="var(--danger)" font-family="SF Mono">180 · 5.2% err</text>
+          </g>
+          <g>
+            <rect x="965" y="152" width="135" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="4 3"/>
+            <text x="1033" y="180" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">Redis</text>
+            <text x="1033" y="196" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">18K ops/s</text>
+          </g>
+          <g>
+            <rect x="965" y="232" width="135" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="4 3"/>
+            <text x="1033" y="260" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">MySQL</text>
+            <text x="1033" y="276" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">2,140 qps</text>
+          </g>
+          <g>
+            <rect x="965" y="312" width="135" height="56" rx="12" fill="var(--bg-elev-2)" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="4 3"/>
+            <text x="1033" y="340" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-1)">stripe.com</text>
+            <text x="1033" y="356" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">外部</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================ APP MONITORING (Runtime) ============================ -->
+    <section class="page" id="page-apm">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between;">
+        <div>
+          <div class="page-title">运行时 Runtime</div>
+          <div class="page-sub">JVM / Go / Node.js / Python / .NET 运行时指标 (Runtime Metrics) · 基于 OTel SDK 上报</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <!-- Service selector (single-select) -->
+          <div class="dd" id="svcDDRuntime">
+            <button class="pill" onclick="toggleDD('svcDDRuntime', event)">
+              <span class="k">服务</span><span class="v" id="svcDDRuntimeLabel">payment-service</span>
+              <svg class="caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dd-menu" style="min-width: 220px;">
+              <div class="dd-item" onclick="pickSvcRuntime(this,'gateway','Java')"><span>gateway</span></div>
+              <div class="dd-item" onclick="pickSvcRuntime(this,'checkout-service','Java')"><span>checkout-service</span></div>
+              <div class="dd-item selected" onclick="pickSvcRuntime(this,'payment-service','Java')"><span>payment-service</span></div>
+              <div class="dd-item" onclick="pickSvcRuntime(this,'risk-service','Go')"><span>risk-service</span></div>
+              <div class="dd-item" onclick="pickSvcRuntime(this,'notify-service','Node.js')"><span>notify-service</span></div>
+              <div class="dd-item" onclick="pickSvcRuntime(this,'auth-service','Python')"><span>auth-service</span></div>
+              <div class="dd-item" onclick="pickSvcRuntime(this,'ledger-service','Java')"><span>ledger-service</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- runtime tabs -->
+      <div class="card" style="margin-top:14px; padding: 6px;">
+        <div style="display:flex; gap: 4px; align-items:center;" class="rt-tabs">
+          <div class="rt-tab active" data-rt="jvm" onclick="switchRuntime(this)">
+            <span class="rt-ico" style="background: linear-gradient(135deg,#f89820,#e76f00);">☕</span>
+            <div><div class="rt-name">Java · JVM</div><div class="rt-ver">OpenJDK 17 · HotSpot</div></div>
+            <span class="badge ok" style="margin-left:auto;">● 3 实例</span>
+          </div>
+          <div class="rt-tab" data-rt="go" onclick="switchRuntime(this)">
+            <span class="rt-ico" style="background: linear-gradient(135deg,#00add8,#007d9c);">Go</span>
+            <div><div class="rt-name">Go · Runtime</div><div class="rt-ver">go 1.22.1</div></div>
+            <span class="badge ok" style="margin-left:auto;">● 2 实例</span>
+          </div>
+          <div class="rt-tab" data-rt="node" onclick="switchRuntime(this)">
+            <span class="rt-ico" style="background: linear-gradient(135deg,#3c873a,#026e00);">JS</span>
+            <div><div class="rt-name">Node.js · V8</div><div class="rt-ver">v20.11 LTS</div></div>
+            <span class="badge ok" style="margin-left:auto;">● 4 实例</span>
+          </div>
+          <div class="rt-tab" data-rt="python" onclick="switchRuntime(this)">
+            <span class="rt-ico" style="background: linear-gradient(135deg,#3776ab,#ffd43b);">Py</span>
+            <div><div class="rt-name">Python · CPython</div><div class="rt-ver">3.12</div></div>
+            <span class="badge muted" style="margin-left:auto;">● 1 实例</span>
+          </div>
+          <div class="rt-tab" data-rt="dotnet" onclick="switchRuntime(this)">
+            <span class="rt-ico" style="background: linear-gradient(135deg,#512bd4,#8661d6);">.NET</span>
+            <div><div class="rt-name">.NET · CLR</div><div class="rt-ver">8.0</div></div>
+            <span class="badge muted" style="margin-left:auto;">— 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============= JVM VIEW ============= -->
+      <div class="rt-view active" data-view="jvm">
+        <!-- KPI -->
+        <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+          <div class="card kpi"><div class="name">Heap 使用</div><div class="value">1,268<span class="unit"> MB</span></div><div class="delta up">▲ 62%</div></div>
+          <div class="card kpi"><div class="name">Old Gen</div><div class="value">812<span class="unit"> MB</span></div><div class="delta up">▲ 58%</div></div>
+          <div class="card kpi"><div class="name">Young GC</div><div class="value">42<span class="unit"> /min</span></div><div class="delta down">▼ 8%</div></div>
+          <div class="card kpi"><div class="name">Full GC</div><div class="value">0<span class="unit"> /h</span></div><div class="delta down">— 稳定</div></div>
+          <div class="card kpi"><div class="name">线程数</div><div class="value">186</div><div class="delta up">▲ 4%</div></div>
+          <div class="card kpi"><div class="name">CPU</div><div class="value">68<span class="unit">%</span></div><div class="delta up">▲ 5%</div></div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Heap breakdown (stacked) -->
+          <div class="card">
+            <div class="card-title"><span>堆内存分代 <span class="hint">· Eden / Survivor / Old</span></span>
+              <div class="tabs"><span class="tab">1h</span><span class="tab active">6h</span><span class="tab">24h</span></div>
+            </div>
+            <svg viewBox="0 0 620 220" width="100%" height="220">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="30" x2="620" y2="30"/><line x1="30" y1="80" x2="620" y2="80"/><line x1="30" y1="130" x2="620" y2="130"/><line x1="30" y1="180" x2="620" y2="180"/></g>
+              <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="34">2GB</text><text x="4" y="84">1.5GB</text><text x="4" y="134">1GB</text><text x="4" y="184">500MB</text></g>
+              <!-- Old Gen (bottom, largest) -->
+              <defs>
+                <linearGradient id="gOld" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#af52de" stop-opacity=".6"/><stop offset="1" stop-color="#af52de" stop-opacity=".1"/></linearGradient>
+                <linearGradient id="gSur" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#30b0c7" stop-opacity=".6"/><stop offset="1" stop-color="#30b0c7" stop-opacity=".1"/></linearGradient>
+                <linearGradient id="gEden" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0a84ff" stop-opacity=".7"/><stop offset="1" stop-color="#0a84ff" stop-opacity=".15"/></linearGradient>
+              </defs>
+              <!-- Old Gen baseline ~112 (80MB used of 2GB) -->
+              <path d="M30 120 L70 118 L110 116 L150 114 L190 112 L230 112 L270 110 L310 108 L350 108 L390 106 L430 104 L470 102 L520 100 L560 100 L620 98 L620 200 L30 200 Z" fill="url(#gOld)" stroke="#af52de" stroke-width="1.3"/>
+              <!-- Survivor above old -->
+              <path d="M30 108 L70 105 L110 108 L150 102 L190 106 L230 100 L270 96 L310 94 L350 92 L390 90 L430 88 L470 84 L520 82 L560 80 L620 78 L620 98 L620 98 L560 100 L520 100 L470 102 L430 104 L390 106 L350 108 L310 108 L270 110 L230 112 L190 112 L150 114 L110 116 L70 118 L30 120 Z" fill="url(#gSur)" stroke="#30b0c7" stroke-width="1.2"/>
+              <!-- Eden (sawtooth — grows then GC drops) -->
+              <path d="M30 60 L50 40 L70 105 L90 50 L110 108 L130 46 L150 102 L170 44 L190 106 L210 42 L230 100 L250 38 L270 96 L290 36 L310 94 L330 34 L350 92 L370 32 L390 90 L410 30 L430 88 L450 28 L470 84 L490 26 L510 82 L540 24 L560 80 L590 22 L620 78 L620 78 L560 80 L520 82 L470 84 L430 88 L390 90 L350 92 L310 94 L270 96 L230 100 L190 106 L150 102 L110 108 L70 105 L30 108 Z" fill="url(#gEden)" stroke="#0a84ff" stroke-width="1.2"/>
+              <!-- Max line -->
+              <line x1="30" y1="14" x2="620" y2="14" stroke="#ff453a" stroke-width="1" stroke-dasharray="3 3"/>
+              <text x="560" y="10" fill="#ff453a" font-size="10" font-family="SF Mono">-Xmx 2GB</text>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span><span style="display:inline-block;width:10px;height:10px;background:#0a84ff;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Eden 412 MB</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:#30b0c7;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Survivor 44 MB</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:#af52de;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Old 812 MB</span>
+              <span style="color:var(--text-3);">Non-Heap 186 MB</span>
+            </div>
+          </div>
+
+          <!-- GC activity -->
+          <div class="card">
+            <div class="card-title"><span>GC 活动 <span class="hint">· 次数 & 暂停</span></span><span class="hint">G1GC</span></div>
+            <svg viewBox="0 0 520 220" width="100%" height="220">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="520" y2="40"/><line x1="30" y1="90" x2="520" y2="90"/><line x1="30" y1="140" x2="520" y2="140"/></g>
+              <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="44">80</text><text x="4" y="94">40</text><text x="4" y="144">10</text></g>
+              <!-- Young GC bars -->
+              <g fill="#0a84ff" opacity=".75">
+                <rect x="36" y="130" width="10" height="55"/><rect x="58" y="120" width="10" height="65"/><rect x="80" y="115" width="10" height="70"/><rect x="102" y="125" width="10" height="60"/>
+                <rect x="124" y="110" width="10" height="75"/><rect x="146" y="118" width="10" height="67"/><rect x="168" y="112" width="10" height="73"/><rect x="190" y="108" width="10" height="77"/>
+                <rect x="212" y="114" width="10" height="71"/><rect x="234" y="105" width="10" height="80"/><rect x="256" y="116" width="10" height="69"/><rect x="278" y="108" width="10" height="77"/>
+                <rect x="300" y="102" width="10" height="83"/><rect x="322" y="110" width="10" height="75"/><rect x="344" y="98" width="10" height="87"/><rect x="366" y="106" width="10" height="79"/>
+                <rect x="388" y="96" width="10" height="89"/><rect x="410" y="104" width="10" height="81"/><rect x="432" y="92" width="10" height="93"/><rect x="454" y="100" width="10" height="85"/>
+                <rect x="476" y="90" width="10" height="95"/><rect x="498" y="86" width="10" height="99"/>
+              </g>
+              <!-- Full GC marker (one full gc) -->
+              <g fill="#ff453a">
+                <rect x="300" y="40" width="3" height="145"/>
+              </g>
+              <text x="305" y="38" font-size="10" fill="#ff453a" font-family="SF Mono">Full GC · 240ms</text>
+              <!-- Pause time line (right axis) -->
+              <path d="M30 170 L52 168 L74 166 L96 168 L118 164 L140 166 L162 162 L184 164 L206 160 L228 162 L250 158 L272 160 L294 158 L316 156 L338 154 L360 156 L382 152 L404 154 L426 150 L448 152 L470 148 L492 150 L514 146" fill="none" stroke="#ff9f0a" stroke-width="1.8"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span><span style="display:inline-block;width:10px;height:10px;background:#0a84ff;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Young GC 42/min</span>
+              <span><span style="display:inline-block;width:10px;height:10px;background:#ff453a;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Full GC 1/6h</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#ff9f0a;margin-right:4px;vertical-align:middle;"></span>暂停 P99 28ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <!-- Threads -->
+          <div class="card">
+            <div class="card-title"><span>线程状态</span><span class="hint">186 total</span></div>
+            <svg viewBox="0 0 260 140" width="100%" height="140">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="20" y1="30" x2="260" y2="30"/><line x1="20" y1="70" x2="260" y2="70"/><line x1="20" y1="110" x2="260" y2="110"/></g>
+              <path d="M20 60 L50 62 L80 58 L110 56 L140 52 L170 54 L200 48 L230 50 L260 46" fill="none" stroke="#30d158" stroke-width="1.8"/>
+              <path d="M20 90 L50 88 L80 92 L110 86 L140 88 L170 84 L200 86 L230 82 L260 84" fill="none" stroke="#0a84ff" stroke-width="1.8"/>
+              <path d="M20 115 L50 118 L80 114 L110 116 L140 110 L170 112 L200 108 L230 110 L260 106" fill="none" stroke="#ff9f0a" stroke-width="1.8"/>
+              <path d="M20 125 L260 125" stroke="#ff453a" stroke-width="1.5" stroke-dasharray="3 3"/>
+            </svg>
+            <div style="margin-top:4px; display:flex; flex-direction:column; gap:2px; font-size:12px;">
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#30d158;border-radius:2px;margin-right:6px;"></span>Runnable</span><span class="mono">82</span></div>
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#0a84ff;border-radius:2px;margin-right:6px;"></span>Waiting</span><span class="mono">56</span></div>
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#ff9f0a;border-radius:2px;margin-right:6px;"></span>Timed-Wait</span><span class="mono">42</span></div>
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:8px;height:8px;background:#ff453a;border-radius:2px;margin-right:6px;"></span>Blocked</span><span class="mono">6</span></div>
+              <div style="display:flex; justify-content:space-between; color:var(--text-3);"><span>Deadlock</span><span class="mono" style="color:var(--success); font-weight:600;">0</span></div>
+            </div>
+          </div>
+
+          <!-- Class loading -->
+          <div class="card">
+            <div class="card-title"><span>Class Loading</span><span class="hint">总计</span></div>
+            <div style="font-size: 30px; font-weight: 700; letter-spacing:-0.02em; margin-top:6px;">18,426</div>
+            <div style="color:var(--text-3); font-size:12px;">Loaded · +142 / 最近 5m</div>
+            <svg viewBox="0 0 260 90" width="100%" height="90" style="margin-top:8px;">
+              <path d="M10 80 L35 76 L60 70 L85 72 L110 64 L135 58 L160 60 L185 52 L210 46 L235 48 L255 40" fill="none" stroke="#bf5af2" stroke-width="1.8"/>
+              <path d="M10 88 L255 88" stroke="var(--grid)" stroke-width="1"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2); margin-top:4px;">
+              <span>Unloaded <strong>328</strong></span>
+              <span>Metaspace <strong>186 MB</strong></span>
+            </div>
+          </div>
+
+          <!-- JIT / Code Cache -->
+          <div class="card">
+            <div class="card-title"><span>JIT 编译</span><span class="hint">HotSpot C2</span></div>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+              <svg class="ring" width="70" height="70" viewBox="0 0 70 70">
+                <circle cx="35" cy="35" r="28" fill="none" stroke="var(--bg-hover)" stroke-width="7"/>
+                <circle cx="35" cy="35" r="28" fill="none" stroke="#ff9f0a" stroke-width="7" stroke-linecap="round" stroke-dasharray="176" stroke-dashoffset="64"/>
+              </svg>
+              <div>
+                <div style="font-size:20px; font-weight:700;">64%</div>
+                <div style="color:var(--text-3); font-size:11px;">Code Cache 占用</div>
+              </div>
+            </div>
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:4px; font-size:12px;">
+              <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-2)">编译方法数</span><span class="mono">12,480</span></div>
+              <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-2)">编译耗时</span><span class="mono">286ms</span></div>
+              <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-2)">Deoptimization</span><span class="mono">18</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection pools -->
+        <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
+          <div class="card">
+            <div class="card-title"><span>数据库连接池 <span class="hint">· HikariCP</span></span></div>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:10px;">
+              <div><div style="font-size:11px; color:var(--text-3);">Active</div><div style="font-size:18px; font-weight:700;">18</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Idle</div><div style="font-size:18px; font-weight:700;">6</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Pending</div><div style="font-size:18px; font-weight:700; color:var(--warning);">2</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Max</div><div style="font-size:18px; font-weight:700; color:var(--text-3);">30</div></div>
+            </div>
+            <div class="bar" style="height:10px;"><span style="width:60%; background: var(--warning);"></span></div>
+            <div style="color:var(--text-3); font-size:11.5px; margin-top:6px;">使用率 60% · 获取连接 P95 12ms · 等待超时 0</div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>线程池 <span class="hint">· Tomcat http-nio</span></span></div>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:10px;">
+              <div><div style="font-size:11px; color:var(--text-3);">Active</div><div style="font-size:18px; font-weight:700;">126</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Idle</div><div style="font-size:18px; font-weight:700;">74</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Queue</div><div style="font-size:18px; font-weight:700;">0</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Max</div><div style="font-size:18px; font-weight:700; color:var(--text-3);">200</div></div>
+            </div>
+            <div class="bar" style="height:10px;"><span style="width:63%; background: var(--accent);"></span></div>
+            <div style="color:var(--text-3); font-size:11.5px; margin-top:6px;">使用率 63% · 拒绝任务 0 · 队列积压 0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============= GO VIEW ============= -->
+      <div class="rt-view" data-view="go" style="display:none;">
+        <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+          <div class="card kpi"><div class="name">Goroutines</div><div class="value">1,842</div><div class="delta up">▲ 12%</div></div>
+          <div class="card kpi"><div class="name">Heap Alloc</div><div class="value">286<span class="unit"> MB</span></div><div class="delta up">▲ 4%</div></div>
+          <div class="card kpi"><div class="name">Heap Sys</div><div class="value">420<span class="unit"> MB</span></div><div class="delta down">— 稳定</div></div>
+          <div class="card kpi"><div class="name">GC 暂停</div><div class="value">0.82<span class="unit"> ms</span></div><div class="delta down">▼ 6%</div></div>
+          <div class="card kpi"><div class="name">GC 频率</div><div class="value">2.4<span class="unit"> /s</span></div><div class="delta up">▲ 3%</div></div>
+          <div class="card kpi"><div class="name">CPU</div><div class="value">54<span class="unit">%</span></div><div class="delta up">▲ 2%</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span>Goroutines 数量</span><span class="hint">go_goroutines</span></div>
+            <svg viewBox="0 0 620 220" width="100%" height="220">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="620" y2="40"/><line x1="30" y1="90" x2="620" y2="90"/><line x1="30" y1="140" x2="620" y2="140"/><line x1="30" y1="180" x2="620" y2="180"/></g>
+              <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="44">3000</text><text x="4" y="94">2000</text><text x="4" y="144">1000</text><text x="4" y="184">500</text></g>
+              <defs><linearGradient id="gGo" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#30b0c7" stop-opacity=".4"/><stop offset="1" stop-color="#30b0c7" stop-opacity="0"/></linearGradient></defs>
+              <path d="M30 130 L70 125 L110 118 L150 110 L190 115 L230 105 L270 95 L310 102 L350 88 L390 95 L430 82 L470 90 L510 76 L560 84 L620 72 L620 200 L30 200 Z" fill="url(#gGo)"/>
+              <path d="M30 130 L70 125 L110 118 L150 110 L190 115 L230 105 L270 95 L310 102 L350 88 L390 95 L430 82 L470 90 L510 76 L560 84 L620 72" fill="none" stroke="#30b0c7" stroke-width="1.8"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span>Current <strong style="color:var(--text-1)">1,842</strong></span>
+              <span>Peak <strong style="color:var(--text-1)">2,104</strong></span>
+              <span>OS Threads <strong style="color:var(--text-1)">24</strong></span>
+              <span style="color:var(--text-3);">GOMAXPROCS 8</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span>Heap 分配 <span class="hint">· runtime.MemStats</span></span></div>
+            <svg viewBox="0 0 520 220" width="100%" height="220">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="520" y2="40"/><line x1="30" y1="90" x2="520" y2="90"/><line x1="30" y1="140" x2="520" y2="140"/></g>
+              <g font-size="10" fill="var(--text-3)" font-family="SF Mono"><text x="4" y="44">512MB</text><text x="4" y="94">256MB</text><text x="4" y="144">128MB</text></g>
+              <!-- HeapSys -->
+              <path d="M30 78 L70 76 L110 78 L150 74 L190 76 L230 72 L270 74 L310 70 L350 72 L390 68 L430 70 L470 66 L520 68" fill="none" stroke="#af52de" stroke-width="1.6" stroke-dasharray="4 3"/>
+              <!-- HeapInuse (sawtooth) -->
+              <path d="M30 120 L50 100 L70 128 L90 106 L110 132 L130 108 L150 130 L170 104 L190 126 L210 100 L230 124 L250 98 L270 122 L290 96 L310 118 L330 94 L350 116 L370 92 L390 112 L410 88 L430 110 L450 86 L470 108 L490 84 L510 106" fill="none" stroke="#0a84ff" stroke-width="1.8"/>
+              <!-- StackInuse -->
+              <path d="M30 170 L70 168 L110 170 L150 166 L190 168 L230 164 L270 166 L310 162 L350 164 L390 160 L430 162 L470 158 L520 160" fill="none" stroke="#30d158" stroke-width="1.6"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span><span style="display:inline-block;width:10px;height:3px;background:#0a84ff;margin-right:4px;vertical-align:middle;"></span>HeapInuse 286 MB</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#af52de;margin-right:4px;vertical-align:middle;"></span>HeapSys 420 MB</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#30d158;margin-right:4px;vertical-align:middle;"></span>StackInuse 18 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-title"><span>GC 暂停时间</span><span class="hint">P50/P95/P99</span></div>
+            <svg viewBox="0 0 260 140" width="100%" height="140">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="20" y1="30" x2="260" y2="30"/><line x1="20" y1="70" x2="260" y2="70"/><line x1="20" y1="110" x2="260" y2="110"/></g>
+              <path d="M20 50 L50 56 L80 48 L110 58 L140 46 L170 52 L200 44 L230 50 L260 42" fill="none" stroke="#ff453a" stroke-width="1.6"/>
+              <path d="M20 80 L50 84 L80 78 L110 86 L140 76 L170 82 L200 74 L230 80 L260 72" fill="none" stroke="#ff9f0a" stroke-width="1.6"/>
+              <path d="M20 110 L50 112 L80 108 L110 114 L140 106 L170 110 L200 104 L230 108 L260 102" fill="none" stroke="#0a84ff" stroke-width="1.6"/>
+            </svg>
+            <div style="display:flex; flex-direction:column; gap:2px; font-size:12px;">
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:10px;height:3px;background:#ff453a;vertical-align:middle;margin-right:4px;"></span>P99</span><span class="mono">2.1 ms</span></div>
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:10px;height:3px;background:#ff9f0a;vertical-align:middle;margin-right:4px;"></span>P95</span><span class="mono">1.4 ms</span></div>
+              <div style="display:flex; justify-content:space-between;"><span><span style="display:inline-block;width:10px;height:3px;background:#0a84ff;vertical-align:middle;margin-right:4px;"></span>P50</span><span class="mono">0.8 ms</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span>GC 周期</span><span class="hint">NumGC</span></div>
+            <div style="font-size:30px; font-weight:700; letter-spacing:-0.02em;">8,642</div>
+            <div style="color:var(--text-3); font-size:12px;">Cycles · +144 / 最近 1m</div>
+            <svg viewBox="0 0 260 90" width="100%" height="90" style="margin-top:8px;">
+              <g fill="#bf5af2" opacity=".8">
+                <rect x="10" y="60" width="8" height="25"/><rect x="22" y="50" width="8" height="35"/><rect x="34" y="55" width="8" height="30"/><rect x="46" y="45" width="8" height="40"/>
+                <rect x="58" y="48" width="8" height="37"/><rect x="70" y="40" width="8" height="45"/><rect x="82" y="52" width="8" height="33"/><rect x="94" y="42" width="8" height="43"/>
+                <rect x="106" y="38" width="8" height="47"/><rect x="118" y="46" width="8" height="39"/><rect x="130" y="36" width="8" height="49"/><rect x="142" y="40" width="8" height="45"/>
+                <rect x="154" y="34" width="8" height="51"/><rect x="166" y="38" width="8" height="47"/><rect x="178" y="32" width="8" height="53"/><rect x="190" y="36" width="8" height="49"/>
+                <rect x="202" y="30" width="8" height="55"/><rect x="214" y="34" width="8" height="51"/><rect x="226" y="28" width="8" height="57"/><rect x="238" y="32" width="8" height="53"/>
+              </g>
+            </svg>
+            <div style="color:var(--text-3); font-size:11.5px; margin-top:4px;">GC 占 CPU <strong style="color:var(--text-1)">0.4%</strong> · GOGC=100</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span>内存分配速率</span><span class="hint">allocs/s</span></div>
+            <div style="font-size:30px; font-weight:700; letter-spacing:-0.02em;">48.2<span style="font-size:14px; color:var(--text-3); font-weight:500;"> MB/s</span></div>
+            <div style="color:var(--text-3); font-size:12px;">Mallocs 142k/s · Frees 138k/s</div>
+            <svg viewBox="0 0 260 90" width="100%" height="90" style="margin-top:8px;">
+              <defs><linearGradient id="gAlloc" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#30d158" stop-opacity=".4"/><stop offset="1" stop-color="#30d158" stop-opacity="0"/></linearGradient></defs>
+              <path d="M10 60 L35 55 L60 50 L85 58 L110 48 L135 42 L160 50 L185 38 L210 44 L235 32 L255 40 L255 90 L10 90 Z" fill="url(#gAlloc)"/>
+              <path d="M10 60 L35 55 L60 50 L85 58 L110 48 L135 42 L160 50 L185 38 L210 44 L235 32 L255 40" fill="none" stroke="#30d158" stroke-width="1.6"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span>pprof 采样 Top Functions</span><span class="hint">近 30s · CPU</span></div>
+          <table class="tbl" style="margin-top:4px;">
+            <thead><tr><th style="padding-left:4px;">Function</th><th>Package</th><th>Flat</th><th>Flat %</th><th>Cum</th><th>Cum %</th></tr></thead>
+            <tbody>
+              <tr><td style="padding-left:4px;" class="mono">(*Encoder).encodeValue</td><td>encoding/json</td><td class="mono">180ms</td><td><span class="mono">18.2%</span> <span style="display:inline-block; width:60px; height:4px; background:var(--bg-hover); border-radius:2px; margin-left:6px; vertical-align:middle;"><span style="display:inline-block; width:60%; height:4px; background:var(--accent); border-radius:2px;"></span></span></td><td class="mono">220ms</td><td class="mono">22.1%</td></tr>
+              <tr><td style="padding-left:4px;" class="mono">runtime.mallocgc</td><td>runtime</td><td class="mono">142ms</td><td><span class="mono">14.3%</span> <span style="display:inline-block; width:60px; height:4px; background:var(--bg-hover); border-radius:2px; margin-left:6px; vertical-align:middle;"><span style="display:inline-block; width:47%; height:4px; background:var(--accent); border-radius:2px;"></span></span></td><td class="mono">210ms</td><td class="mono">21.2%</td></tr>
+              <tr><td style="padding-left:4px;" class="mono">(*Conn).readRequest</td><td>net/http</td><td class="mono">96ms</td><td><span class="mono">9.6%</span> <span style="display:inline-block; width:60px; height:4px; background:var(--bg-hover); border-radius:2px; margin-left:6px; vertical-align:middle;"><span style="display:inline-block; width:32%; height:4px; background:var(--accent); border-radius:2px;"></span></span></td><td class="mono">184ms</td><td class="mono">18.5%</td></tr>
+              <tr><td style="padding-left:4px;" class="mono">checkout.validateOrder</td><td>checkout/service</td><td class="mono">72ms</td><td><span class="mono">7.2%</span> <span style="display:inline-block; width:60px; height:4px; background:var(--bg-hover); border-radius:2px; margin-left:6px; vertical-align:middle;"><span style="display:inline-block; width:24%; height:4px; background:var(--accent); border-radius:2px;"></span></span></td><td class="mono">148ms</td><td class="mono">14.9%</td></tr>
+              <tr><td style="padding-left:4px;" class="mono">runtime.scanobject</td><td>runtime</td><td class="mono">58ms</td><td><span class="mono">5.8%</span> <span style="display:inline-block; width:60px; height:4px; background:var(--bg-hover); border-radius:2px; margin-left:6px; vertical-align:middle;"><span style="display:inline-block; width:19%; height:4px; background:var(--accent); border-radius:2px;"></span></span></td><td class="mono">58ms</td><td class="mono">5.8%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============= NODE VIEW ============= -->
+      <div class="rt-view" data-view="node" style="display:none;">
+        <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+          <div class="card kpi"><div class="name">Event Loop Lag</div><div class="value">8.2<span class="unit"> ms</span></div><div class="delta up">▲ 12%</div></div>
+          <div class="card kpi"><div class="name">Heap Used</div><div class="value">186<span class="unit"> MB</span></div><div class="delta up">▲ 4%</div></div>
+          <div class="card kpi"><div class="name">RSS</div><div class="value">312<span class="unit"> MB</span></div><div class="delta down">— 稳定</div></div>
+          <div class="card kpi"><div class="name">Handles</div><div class="value">284</div><div class="delta up">▲ 6%</div></div>
+          <div class="card kpi"><div class="name">Requests</div><div class="value">12</div><div class="delta down">— 空闲</div></div>
+          <div class="card kpi"><div class="name">CPU</div><div class="value">42<span class="unit">%</span></div><div class="delta down">▼ 3%</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span>Event Loop 延迟</span><span class="hint">ms</span></div>
+            <svg viewBox="0 0 620 180" width="100%" height="180">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="620" y2="40"/><line x1="30" y1="90" x2="620" y2="90"/><line x1="30" y1="140" x2="620" y2="140"/></g>
+              <path d="M30 130 L80 120 L130 126 L180 110 L230 118 L280 100 L330 108 L380 88 L430 98 L480 80 L530 90 L580 72 L620 82" fill="none" stroke="#ff9f0a" stroke-width="1.8"/>
+              <path d="M30 150 L80 148 L130 150 L180 144 L230 146 L280 140 L330 142 L380 136 L430 138 L480 132 L530 134 L580 128 L620 130" fill="none" stroke="#0a84ff" stroke-width="1.8"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span><span style="display:inline-block;width:10px;height:3px;background:#ff9f0a;margin-right:4px;vertical-align:middle;"></span>P95 12.8 ms</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#0a84ff;margin-right:4px;vertical-align:middle;"></span>P50 3.2 ms</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>V8 Heap 空间</span><span class="hint">new/old/large</span></div>
+            <svg viewBox="0 0 520 180" width="100%" height="180">
+              <g stroke="var(--grid)" stroke-width="1"><line x1="30" y1="40" x2="520" y2="40"/><line x1="30" y1="90" x2="520" y2="90"/><line x1="30" y1="140" x2="520" y2="140"/></g>
+              <path d="M30 100 L70 94 L110 98 L150 90 L190 94 L230 86 L270 90 L310 82 L350 86 L390 78 L430 82 L470 74 L520 78" fill="none" stroke="#af52de" stroke-width="1.8"/>
+              <path d="M30 130 L70 128 L110 130 L150 126 L190 128 L230 124 L270 126 L310 122 L350 124 L390 120 L430 122 L470 118 L520 120" fill="none" stroke="#30b0c7" stroke-width="1.8"/>
+              <path d="M30 150 L70 150 L110 148 L150 150 L190 146 L230 148 L270 144 L310 146 L350 142 L390 144 L430 140 L470 142 L520 138" fill="none" stroke="#30d158" stroke-width="1.8"/>
+            </svg>
+            <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-2);">
+              <span><span style="display:inline-block;width:10px;height:3px;background:#af52de;margin-right:4px;vertical-align:middle;"></span>Old Space 128 MB</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#30b0c7;margin-right:4px;vertical-align:middle;"></span>New Space 42 MB</span>
+              <span><span style="display:inline-block;width:10px;height:3px;background:#30d158;margin-right:4px;vertical-align:middle;"></span>Large 16 MB</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============= PYTHON VIEW ============= -->
+      <div class="rt-view" data-view="python" style="display:none;">
+        <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+          <div class="card kpi"><div class="name">Process RSS</div><div class="value">420<span class="unit"> MB</span></div><div class="delta up">▲ 6%</div></div>
+          <div class="card kpi"><div class="name">GC Gen 0</div><div class="value">1.2k<span class="unit"> /min</span></div><div class="delta up">▲ 4%</div></div>
+          <div class="card kpi"><div class="name">GC Gen 2</div><div class="value">4<span class="unit"> /min</span></div><div class="delta down">— 稳定</div></div>
+          <div class="card kpi"><div class="name">Objects</div><div class="value">82k</div><div class="delta up">▲ 2%</div></div>
+          <div class="card kpi"><div class="name">GIL Wait</div><div class="value">18<span class="unit">%</span></div><div class="delta up">▲ 3%</div></div>
+          <div class="card kpi"><div class="name">CPU</div><div class="value">36<span class="unit">%</span></div><div class="delta down">▼ 2%</div></div>
+        </div>
+        <div class="card" style="margin-top:12px; padding:28px; text-align:center; color:var(--text-3);">
+          CPython 3.12 · gc / tracemalloc / asyncio 指标面板 · 详情请选择对应服务实例
+        </div>
+      </div>
+
+      <!-- ============= .NET VIEW ============= -->
+      <div class="rt-view" data-view="dotnet" style="display:none;">
+        <div class="card" style="margin-top:12px; padding:40px; text-align:center; color:var(--text-3);">
+          该项目暂无 .NET 应用实例接入。在「接入指导」中可配置 OpenTelemetry .NET SDK。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ ONBOARDING ============================ -->
+    <section class="page" id="page-onboarding">
+      <div style="display:flex; align-items:flex-end; justify-content:space-between;">
+        <div>
+          <div class="page-title">接入指导</div>
+          <div class="page-sub">基于 OpenTelemetry 协议 · 5 分钟完成接入 · 支持 15+ 语言</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="badge info">项目 Token · <span class="mono">lm_xxxx_9a12bc</span></span>
+          <button class="pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>复制</button>
+        </div>
+      </div>
+
+      <!-- Data pipeline architecture overview -->
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title"><span>数据链路 <span class="hint">· 端到端架构</span></span><span class="hint">存储引擎 ClickHouse</span></div>
+        <svg viewBox="0 0 1100 220" width="100%" height="220">
+          <defs>
+            <marker id="pArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--text-3)"/></marker>
+            <marker id="pArrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+          </defs>
+          <!-- SDK / Agent -->
+          <g>
+            <rect x="20" y="80" width="140" height="60" rx="10" fill="var(--bg-elev-2)" stroke="var(--accent)" stroke-width="1.5"/>
+            <text x="90" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text-1)" font-family="-apple-system">SDK / Agent</text>
+            <text x="90" y="124" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">OTel Java / Go / Node</text>
+          </g>
+          <!-- OTLP Collector -->
+          <g>
+            <rect x="210" y="80" width="140" height="60" rx="10" fill="var(--bg-elev-2)" stroke="var(--purple)" stroke-width="1.5"/>
+            <text x="280" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text-1)">OTLP Collector</text>
+            <text x="280" y="124" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">gRPC 4317 / HTTP 4318</text>
+          </g>
+          <!-- Kafka -->
+          <g>
+            <rect x="400" y="80" width="140" height="60" rx="10" fill="var(--bg-elev-2)" stroke="var(--teal)" stroke-width="1.5"/>
+            <text x="470" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text-1)">Kafka 缓冲</text>
+            <text x="470" y="124" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">traces / metrics / logs</text>
+          </g>
+          <!-- Flink (upper branch — aggregation) -->
+          <g>
+            <rect x="590" y="20" width="170" height="60" rx="10" fill="#0a84ff15" stroke="var(--accent)" stroke-width="1.6"/>
+            <text x="675" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text-1)" font-family="-apple-system">Flink 实时计算</text>
+            <text x="675" y="62" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">metrics 聚合 · 拓扑边计算</text>
+          </g>
+          <!-- Flink output labels -->
+          <g font-family="SF Mono" font-size="10" fill="var(--accent)">
+            <text x="590" y="94">service_metrics_1m · topology_edges_1m</text>
+          </g>
+          <!-- ClickHouse -->
+          <g>
+            <rect x="810" y="70" width="170" height="80" rx="10" fill="#ffcc0020" stroke="#ffcc00" stroke-width="2"/>
+            <g fill="#ffcc00" transform="translate(824, 86)">
+              <rect x="0" y="0" width="4" height="28"/><rect x="7" y="0" width="4" height="28"/><rect x="14" y="0" width="4" height="28"/><rect x="21" y="0" width="4" height="28"/><rect x="28" y="10" width="2" height="8"/>
+            </g>
+            <text x="895" y="102" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text-1)">ClickHouse</text>
+            <text x="895" y="120" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">6 节点 · 3 副本</text>
+            <text x="895" y="134" text-anchor="middle" font-size="10.5" fill="var(--text-3)" font-family="SF Mono">压缩 9.4x · 列存</text>
+          </g>
+          <!-- 啄木鸟 2.0 -->
+          <g>
+            <rect x="1020" y="80" width="70" height="60" rx="10" fill="var(--bg-elev-2)" stroke="var(--success)" stroke-width="1.5"/>
+            <text x="1055" y="108" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--text-1)">啄木鸟</text>
+            <text x="1055" y="124" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="SF Mono">2.0</text>
+          </g>
+
+          <!-- arrows: straight -->
+          <g stroke="var(--text-3)" stroke-width="1.5" fill="none" marker-end="url(#pArrow)">
+            <line x1="162" y1="110" x2="206" y2="110"/>
+            <line x1="352" y1="110" x2="396" y2="110"/>
+          </g>
+          <!-- Kafka → Flink (upper branch) -->
+          <g stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#pArrowA)">
+            <path d="M540 100 C 560 80, 570 55, 588 50"/>
+          </g>
+          <!-- Flink → ClickHouse -->
+          <g stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#pArrowA)">
+            <path d="M760 50 C 780 55, 790 80, 808 100"/>
+          </g>
+          <!-- Kafka → ClickHouse (direct, traces/logs) -->
+          <g stroke="var(--text-3)" stroke-width="1.5" fill="none" marker-end="url(#pArrow)" stroke-dasharray="4 3">
+            <line x1="540" y1="120" x2="808" y2="120"/>
+          </g>
+          <!-- ClickHouse → UI -->
+          <g stroke="var(--text-3)" stroke-width="1.5" fill="none" marker-end="url(#pArrow)">
+            <line x1="982" y1="110" x2="1016" y2="110"/>
+          </g>
+
+          <!-- labels on arrows -->
+          <g font-family="SF Mono" font-size="10" fill="var(--text-3)">
+            <text x="168" y="104">OTLP</text>
+            <text x="358" y="104">Batch</text>
+            <text x="600" y="136">traces / metrics / logs 直写</text>
+            <text x="990" y="104">SQL</text>
+          </g>
+        </svg>
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top:10px;">
+          <div style="padding:10px 12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">写入吞吐</div>
+            <div style="font-weight:700; font-size:16px; margin-top:2px;">1.2M<span style="color:var(--text-3); font-size:11.5px; font-weight:500;"> rows/s</span></div>
+          </div>
+          <div style="padding:10px 12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">查询 P95</div>
+            <div style="font-weight:700; font-size:16px; margin-top:2px;">186<span style="color:var(--text-3); font-size:11.5px; font-weight:500;"> ms</span></div>
+          </div>
+          <div style="padding:10px 12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">压缩比</div>
+            <div style="font-weight:700; font-size:16px; margin-top:2px;">9.4x <span style="color:var(--success); font-size:11.5px; font-weight:600;">ZSTD</span></div>
+          </div>
+          <div style="padding:10px 12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+            <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">保留策略</div>
+            <div style="font-weight:700; font-size:16px; margin-top:2px;">30d<span style="color:var(--text-3); font-size:11.5px; font-weight:500;"> · TTL 冷热分层</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- progress -->
+      <div class="card" style="margin-top:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="display:flex; align-items:center; gap:12px; flex:1;">
+            <div style="display:flex; gap:4px; flex:1;">
+              <div style="height:6px; flex:1; border-radius:3px; background:var(--success);"></div>
+              <div style="height:6px; flex:1; border-radius:3px; background:var(--success);"></div>
+              <div style="height:6px; flex:1; border-radius:3px; background:var(--accent);"></div>
+              <div style="height:6px; flex:1; border-radius:3px; background:var(--bg-hover);"></div>
+              <div style="height:6px; flex:1; border-radius:3px; background:var(--bg-hover);"></div>
+            </div>
+            <span style="font-size:12.5px; color:var(--text-2); font-weight:600;">2 / 5 已完成</span>
+          </div>
+          <span class="badge ok">● 已接收到 3,214 spans</span>
+        </div>
+      </div>
+
+      <div class="steps">
+        <!-- step nav -->
+        <div class="stepnav">
+          <div class="s"><div class="num">✓</div><div><div class="ttl">选择语言</div><div class="sub">Java / Node / Go / Python...</div></div></div>
+          <div class="s"><div class="num">✓</div><div><div class="ttl">安装 SDK</div><div class="sub">Maven / npm / pip</div></div></div>
+          <div class="s active"><div class="num">3</div><div><div class="ttl">配置 Collector</div><div class="sub">OTLP Endpoint & Token</div></div></div>
+          <div class="s"><div class="num">4</div><div><div class="ttl">埋点与启动</div><div class="sub">自动/手动埋点</div></div></div>
+          <div class="s"><div class="num">5</div><div><div class="ttl">验证数据</div><div class="sub">查看首条 Trace</div></div></div>
+        </div>
+
+        <!-- step content -->
+        <div>
+          <div class="card">
+            <div class="card-title">
+              <span>3. 配置 Collector Endpoint</span>
+              <span class="hint">服务端已就绪 · 无需自建</span>
+            </div>
+
+            <div style="color:var(--text-2); font-size:13px; line-height:1.7; margin-bottom: 12px;">
+              将您的 SDK / Agent 指向以下 OTLP Endpoint，并使用专属 Token 进行认证。我们完全兼容 <strong>OpenTelemetry</strong> 协议，<strong>无需修改任何业务代码</strong>。
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+              <div style="padding:12px 14px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+                <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">OTLP gRPC</div>
+                <div class="mono" style="font-size:12.5px; margin-top:4px;">otlp.lumen.dev:4317</div>
+              </div>
+              <div style="padding:12px 14px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+                <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; font-weight:600; letter-spacing:.05em;">OTLP HTTP</div>
+                <div class="mono" style="font-size:12.5px; margin-top:4px;">https://otlp.lumen.dev:4318</div>
+              </div>
+            </div>
+
+            <div class="lang-tabs">
+              <div class="lt active">Java</div>
+              <div class="lt">Node.js</div>
+              <div class="lt">Go</div>
+              <div class="lt">Python</div>
+              <div class="lt">.NET</div>
+              <div class="lt">Rust</div>
+              <div class="lt">K8s</div>
+              <div class="lt">Docker</div>
+            </div>
+
+            <pre class="code"><span class="copy">复制</span><span class="cm"># 1. 下载 OpenTelemetry Java Agent</span>
+<span class="fn">curl</span> -L <span class="st">"https://lumen.dev/download/otel-agent.jar"</span> -o otel-agent.jar
+
+<span class="cm"># 2. 启动应用时挂载 Agent (零代码改造)</span>
+<span class="kw">java</span> \
+  -javaagent:./otel-agent.jar \
+  -Dotel.service.name=<span class="st">payment-gateway</span> \
+  -Dotel.resource.attributes=<span class="st">deployment.environment=production</span> \
+  -Dotel.exporter.otlp.endpoint=<span class="st">https://otlp.lumen.dev:4317</span> \
+  -Dotel.exporter.otlp.headers=<span class="st">"authorization=Bearer lm_xxxx_9a12bc"</span> \
+  -Dotel.traces.sampler=<span class="st">parentbased_traceidratio</span> \
+  -Dotel.traces.sampler.arg=<span class="num">0.1</span> \
+  -jar your-application.jar</pre>
+
+            <div style="margin-top: 14px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <div style="padding:12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+                <div style="font-size:20px;">⚡</div>
+                <div style="font-weight:600; margin-top:4px;">自动埋点</div>
+                <div style="color:var(--text-3); font-size:11.5px; margin-top:2px; line-height:1.5;">HTTP/DB/Redis/Kafka 等 120+ 框架开箱即用</div>
+              </div>
+              <div style="padding:12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+                <div style="font-size:20px;">🔒</div>
+                <div style="font-weight:600; margin-top:4px;">mTLS 加密</div>
+                <div style="color:var(--text-3); font-size:11.5px; margin-top:2px; line-height:1.5;">所有数据通过 TLS 1.3 + Token 双向认证</div>
+              </div>
+              <div style="padding:12px; border-radius:10px; background:var(--bg-elev-2); border:1px solid var(--border);">
+                <div style="font-size:20px;">📐</div>
+                <div style="font-weight:600; margin-top:4px;">协议开放</div>
+                <div style="color:var(--text-3); font-size:11.5px; margin-top:2px; line-height:1.5;">基于 OTel 协议，无任何 vendor lock-in</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 16px; display:flex; gap: 8px; justify-content:flex-end;">
+              <button class="pill">← 上一步</button>
+              <button class="pill" style="background:var(--accent); color:white; border-color:var(--accent);">下一步 · 埋点与启动 →</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <div class="card-title"><span>实时接入状态</span><span class="hint">每 5 秒刷新</span></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
+              <div><div style="font-size:11px; color:var(--text-3);">Agent 连接</div><div style="font-weight:600; color:var(--success); font-size:14px; margin-top:2px;">● 1 已连接</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Spans 接收</div><div style="font-weight:600; font-size:14px; margin-top:2px;">3,214</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">Metrics 接收</div><div style="font-weight:600; font-size:14px; margin-top:2px;">218</div></div>
+              <div><div style="font-size:11px; color:var(--text-3);">首条 Trace 时间</div><div style="font-weight:600; font-size:14px; margin-top:2px;" class="mono">18:32:47</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // ============ Page switching ============
+  function go(el) {
+    const page = el.dataset.page;
+    if (!page) return;
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('page-' + page);
+    if (target) target.classList.add('active');
+    document.querySelector('.main').scrollTop = 0;
+  }
+
+  // ============ Theme toggle ============
+  function toggleTheme() {
+    const root = document.documentElement;
+    const cur = root.getAttribute('data-theme') || 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  // ============ Refresh ============
+  function manualRefresh(btn) {
+    const ic = document.getElementById('refreshIcon');
+    ic.classList.add('spin');
+    setTimeout(() => ic.classList.remove('spin'), 1200);
+  }
+
+  // Auto-refresh demo
+  let autoTimer = null;
+  function applyAutoRefresh() {
+    if (autoTimer) clearInterval(autoTimer);
+    const v = document.getElementById('autoRefresh').value;
+    const map = { '关闭': 0, '30s': 30000, '1m': 60000, '5m': 300000 };
+    const ms = map[v] || 0;
+    if (ms > 0) {
+      autoTimer = setInterval(() => manualRefresh(), ms);
+    }
+  }
+  document.getElementById('autoRefresh').addEventListener('change', applyAutoRefresh);
+  applyAutoRefresh();
+
+  // ============ Dropdown (time range) ============
+  function toggleDD(id, ev) {
+    if (ev) ev.stopPropagation();
+    document.querySelectorAll('.dd.open').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('open');
+  }
+  function pickEnv(el, label, color) {
+    document.querySelectorAll('#envDD .dd-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('envDDLabel').textContent = label;
+    const dot = document.getElementById('envDot');
+    dot.style.background = color;
+    dot.style.boxShadow = '0 0 0 3px color-mix(in srgb, ' + color + ' 25%, transparent)';
+    document.getElementById('envDD').classList.remove('open');
+    manualRefresh();
+  }
+  function pickTime(el, label) {
+    document.querySelectorAll('#timeDD .dd-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('timeDDLabel').textContent = label;
+    document.getElementById('timeDD').classList.remove('open');
+    // trigger a visual refresh
+    manualRefresh();
+  }
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.dd.open').forEach(d => {
+      if (!d.contains(e.target)) d.classList.remove('open');
+    });
+  });
+
+  // ============ Service multi-select ============
+  function toggleSvc(el, ddId) {
+    el.classList.toggle('checked');
+    updateSvcLabel(ddId);
+  }
+  function setAllSvc(ddId, check) {
+    document.querySelectorAll('#' + ddId + ' .dd-item[data-svc]').forEach(i => {
+      i.classList.toggle('checked', check);
+    });
+    updateSvcLabel(ddId);
+  }
+  function updateSvcLabel(ddId) {
+    const items = document.querySelectorAll('#' + ddId + ' .dd-item[data-svc]');
+    const total = items.length;
+    const checked = document.querySelectorAll('#' + ddId + ' .dd-item[data-svc].checked');
+    const label = document.getElementById(ddId + 'Label');
+    if (!label) return;
+    if (checked.length === 0) label.textContent = '未选';
+    else if (checked.length === total) label.textContent = '全部 (' + total + ')';
+    else if (checked.length === 1) label.textContent = checked[0].dataset.svc;
+    else label.textContent = checked.length + ' 个服务';
+  }
+  function filterSvc(input, listId) {
+    const q = input.value.toLowerCase().trim();
+    document.querySelectorAll('#' + listId + ' .dd-item').forEach(i => {
+      const s = (i.dataset.svc || i.textContent).toLowerCase();
+      i.style.display = (!q || s.includes(q)) ? '' : 'none';
+    });
+  }
+  // Project single-select + search
+  function pickProj(el, name) {
+    document.querySelectorAll('#projDDList .dd-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('projDDLabel').textContent = name;
+    document.getElementById('projDD').classList.remove('open');
+    if (typeof manualRefresh === 'function') manualRefresh();
+  }
+  function filterProj(input) {
+    const q = input.value.toLowerCase().trim();
+    let anyVisible = false;
+    document.querySelectorAll('#projDDList .dd-item').forEach(i => {
+      const name = (i.dataset.proj || '').toLowerCase();
+      const show = !q || name.includes(q);
+      i.style.display = show ? '' : 'none';
+      if (show) anyVisible = true;
+    });
+    // hide section headers / separators when nothing matches beneath them (simple visual pass)
+    const list = document.getElementById('projDDList');
+    list.querySelectorAll('.dd-section, .dd-sep').forEach(s => { s.style.display = q ? 'none' : ''; });
+    let empty = document.getElementById('projDDEmpty');
+    if (!anyVisible) {
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.id = 'projDDEmpty';
+        empty.className = 'dd-item';
+        empty.style.color = 'var(--text-3)';
+        empty.style.justifyContent = 'center';
+        empty.textContent = '无匹配项目';
+        list.appendChild(empty);
+      }
+      empty.style.display = '';
+    } else if (empty) { empty.style.display = 'none'; }
+  }
+  // Auto-focus project search when dropdown opens; clear on close
+  document.addEventListener('DOMContentLoaded', () => {
+    const projDD = document.getElementById('projDD');
+    if (!projDD) return;
+    const input = document.getElementById('projSearchInput');
+    const obs = new MutationObserver(() => {
+      if (projDD.classList.contains('open')) {
+        setTimeout(() => input && input.focus(), 50);
+      } else if (input) {
+        input.value = '';
+        filterProj(input);
+      }
+    });
+    obs.observe(projDD, { attributes: true, attributeFilter: ['class'] });
+    // keyboard: Enter selects first visible, Esc closes
+    if (input) {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const first = document.querySelector('#projDDList .dd-item:not([style*="display: none"])');
+          if (first && first.onclick) first.click();
+        } else if (e.key === 'Escape') {
+          projDD.classList.remove('open');
+        }
+      });
+    }
+  });
+  // Runtime service -> instance cascade
+  function pickSvcMetrics(el, svc) {
+    document.querySelectorAll('#svcDDMetrics .dd-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('svcDDMetricsLabel').textContent = svc;
+    document.getElementById('svcDDMetrics').classList.remove('open');
+    if (typeof manualRefresh === 'function') manualRefresh();
+  }
+  function pickSvcRuntime(el, svc, lang) {
+    document.querySelectorAll('#svcDDRuntime .dd-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('svcDDRuntimeLabel').textContent = svc;
+    document.getElementById('svcDDRuntime').classList.remove('open');
+    // Auto-switch runtime tab based on language
+    const rtMap = { 'Java': 'jvm', 'Go': 'go', 'Node.js': 'node', 'Python': 'python', '.NET': 'dotnet' };
+    const rt = rtMap[lang];
+    if (rt) {
+      const tab = document.querySelector('.rt-tab[data-rt="' + rt + '"]');
+      if (tab) switchRuntime(tab);
+    }
+    manualRefresh();
+  }
+  // Runtime switcher (Application Monitoring page)
+  function switchRuntime(el) {
+    const rt = el.dataset.rt;
+    document.querySelectorAll('.rt-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.rt-view').forEach(v => {
+      v.style.display = (v.dataset.view === rt) ? '' : 'none';
+    });
+  }
+
+  // scroll to trace detail when clicking a row
+  function showTrace() {
+    const el = document.querySelector('#page-traces .waterfall');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+</script>
+</body>
+</html>
