@@ -98,15 +98,26 @@ APM.renderTraces = function() {
     if (p.sql)       ensure('db.statement', '=~', p.sql.slice(0, 40) + '…');
     if (p.external)  ensure('peer.host', '=', p.external);
     if (p.trace)     ensure('trace.id', '=', p.trace);
+    if (p.topic)     ensure('messaging.destination', '=', p.topic);
+    if (p.clusterId) {
+      // Resolve cluster → set of services that touch it. Compose an OR-ish svc filter
+      // by storing on the query via a synthetic "cluster" key consumed in `matches`.
+      APM.traceQuery._clusterId = p.clusterId;
+    } else {
+      delete APM.traceQuery._clusterId;
+    }
     APM.pageParams = {}; // consume once
   }
+  const cid = APM.traceQuery._clusterId;
+  const cluster = cid ? APM.clusterById(cid) : null;
   return `
     <div class="between">
       <div>
-        <div class="page-title">调用链 Traces</div>
+        <div class="page-title">调用链 Traces${cluster ? ` <span style="font-size:13px;color:var(--text-3);font-weight:500;">· 集群 ${cluster.name}</span>` : ''}</div>
         <div class="page-sub">分布式追踪 · OpenTelemetry · 共采集 ${(APM.traces.length*8421).toLocaleString()} traces / 1h</div>
       </div>
       <div style="display:flex; gap:8px;">
+        ${cluster ? `<button class="pill" onclick="delete APM.traceQuery._clusterId; APM.renderPage();">清除集群过滤</button>` : ''}
         <button class="pill" onclick="APM.exportTraces()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>导出</button>
         <button class="pill primary" onclick="APM.saveCurrentTraceQuery()">保存查询</button>
       </div>
@@ -146,8 +157,23 @@ APM.tracesBody = function(forceSvcFilter, embedded) {
     if (c.op === '=~') return String(v || '').includes(c.val.replace('…',''));
     return true;
   };
+  // Cluster scoping: if a clusterId was passed via route, derive the set of svcs
+  // that connect to that cluster (from connectionPools/redisOps/kafkaProducers/Consumers).
+  const clusterId = APM.traceQuery._clusterId;
+  let clusterSvcs = null;
+  if (clusterId) {
+    const set = new Set();
+    APM.connectionPools.filter(p => p.clusterId === clusterId).forEach(p => set.add(p.svc));
+    APM.redisOps.filter(o => o.clusterId === clusterId).forEach(o => set.add(o.svc));
+    APM.kafkaProducers.filter(p => p.clusterId === clusterId).forEach(p => set.add(p.svc));
+    APM.kafkaConsumers.filter(c => c.clusterId === clusterId).forEach(c => set.add(c.svc));
+    APM.slowQueries.filter(q => q.clusterId === clusterId).forEach(q => set.add(q.svc));
+    clusterSvcs = set;
+  }
   // Restrict to current project's services first.
-  let filtered = APM.traces.filter(t => APM.inProject(t.svc)).filter(t => conds.every(c => matches(t, c)));
+  let filtered = APM.traces.filter(t => APM.inProject(t.svc));
+  if (clusterSvcs) filtered = filtered.filter(t => clusterSvcs.has(t.svc));
+  filtered = filtered.filter(t => conds.every(c => matches(t, c)));
   // Sort
   if (APM.traceQuery.sort === 'dur') filtered = filtered.slice().sort((a,b)=>b.dur-a.dur);
   else if (APM.traceQuery.sort === 'spans') filtered = filtered.slice().sort((a,b)=>b.spans-a.spans);

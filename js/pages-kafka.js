@@ -120,6 +120,14 @@ APM.lagBadgeColor = function(lag) {
 };
 
 APM.renderKafka = function() {
+  // One-shot route param: ?clusterId=... auto-applies the cluster filter.
+  if (APM.pageParams && APM.pageParams.clusterId) {
+    if (APM.kafkaClusters.find(c => c.id === APM.pageParams.clusterId)) {
+      APM.kafkaClusterFilter = APM.pageParams.clusterId;
+      APM.kafkaTab = APM.kafkaTab === 'clusters' ? 'topics' : APM.kafkaTab;
+    }
+    delete APM.pageParams.clusterId;
+  }
   // Consume route param topic / group preselect
   const preselectTopic = APM.pageParams && APM.pageParams.topic;
   const preselectGroup = APM.pageParams && APM.pageParams.group;

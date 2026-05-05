@@ -150,12 +150,13 @@ APM.logsBody = function(svcFilter, embedded) {
       ${logs.length === 0 ? `<div class="placeholder" style="margin: 24px;"><div class="icon">🔍</div>没有匹配的日志</div>` : `<div style="max-height: 540px; overflow-y: auto;">
         ${logs.map(l => {
           const tr = (l.msg.match(/trace=([a-z0-9.]+)/i) || [])[1];
-          const traceClick = tr || l.trace ? `onclick="APM.go('traces',{trace:'${tr || l.trace}'})"` : '';
-          return `<div class="log-row sev-${l.sev.toLowerCase()}" ${traceClick} ${traceClick ? 'style="cursor:pointer;"' : ''}>
+          const traceId = tr || l.trace;
+          return `<div class="log-row sev-${l.sev.toLowerCase()}">
             <div class="log-time">${l.ts}</div>
-            <div class="log-svc">${l.svc}</div>
+            <div class="log-svc"><a class="link" onclick="APM.go('service',{id:'${l.svc}'})" title="跳转到 ${l.svc} 详情">${l.svc}</a></div>
             <div class="log-sev ${l.sev.toLowerCase()}">${l.sev}</div>
-            <div class="log-msg">${l.msg.replace(/trace=([a-z0-9.]+)/, 'trace=<span class="lt">$1</span>')}</div>
+            <div class="log-msg">${l.msg.replace(/trace=([a-z0-9.]+)/, `trace=<a class="lt" onclick="APM.go('traces',{trace:'$1'})" title="查看完整 trace">$1</a>`)}</div>
+            ${traceId ? `<button class="pill" style="padding:2px 7px;font-size:10.5px;align-self:center;flex-shrink:0;" onclick="event.stopPropagation();APM.go('traces',{trace:'${traceId}'})">trace ↗</button>` : ''}
           </div>`;
         }).join('')}
       </div>`}

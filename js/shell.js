@@ -163,6 +163,7 @@ APM.renderSidebar = function() {
 APM.toggleSidebar = function() {
   APM.sidebarCollapsed = !APM.sidebarCollapsed;
   document.querySelector('.app').classList.toggle('sidebar-collapsed', APM.sidebarCollapsed);
+  try { localStorage.setItem('apm:sidebar', APM.sidebarCollapsed ? '1' : '0'); } catch (e) {}
   APM.renderSidebar();
 };
 
@@ -248,7 +249,9 @@ APM.pickProject = function(id) {
 APM.toggleTheme = function() {
   const root = document.documentElement;
   const cur = root.getAttribute('data-theme') || 'light';
-  root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('apm:theme', next); } catch (e) {}
 };
 APM.manualRefresh = function() {
   const ic = document.getElementById('refreshIcon');

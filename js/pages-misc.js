@@ -48,8 +48,9 @@ APM.renderAlerts = function() {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         n9e
       </span></td>
-      <td style="text-align:right;">
-        <a class="link" onclick="APM.openN9e('/alert-his-events/${a.id}','告警事件 ${a.title}')" style="font-size:11.5px;cursor:pointer;">在 n9e 中处理 ↗</a>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="pill" style="padding:4px 8px;font-size:11px;" title="查看该服务最近的相关 trace" onclick="APM.go('traces',{svcFilter:'${a.svc}'})">查看 trace</button>
+        <a class="link" onclick="APM.openN9e('/alert-his-events/${a.id}','告警事件 ${a.title}')" style="font-size:11.5px;cursor:pointer;margin-left:6px;">在 n9e 处理 ↗</a>
       </td>
     </tr>`;
   };

@@ -75,6 +75,16 @@ APM.signOut = function() {
 
 // Boot main app — same logic as the original DOMContentLoaded handler in app.js.
 APM._bootApp = function() {
+  // Restore persisted preferences before first render.
+  try {
+    const savedTheme = localStorage.getItem('apm:theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+    const savedSidebar = localStorage.getItem('apm:sidebar');
+    if (savedSidebar === '1') APM.sidebarCollapsed = true;
+    if (savedSidebar === '0') APM.sidebarCollapsed = false;
+  } catch (e) {}
   APM._projectServicesAll = APM.projectServices[APM.currentProject] || APM.projectServices['eshop'];
   APM._reapplyEnv && APM._reapplyEnv();
   const app = document.querySelector('.app');

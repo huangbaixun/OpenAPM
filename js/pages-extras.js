@@ -333,6 +333,14 @@ APM._dbApplyClusterFilter = function(rows) {
 };
 
 APM.renderDatabase = function() {
+  // One-shot route param: ?clusterId=... auto-applies the cluster filter.
+  if (APM.pageParams && APM.pageParams.clusterId) {
+    if (APM.dbClusters.find(c => c.id === APM.pageParams.clusterId)) {
+      APM.dbClusterFilter = APM.pageParams.clusterId;
+      APM.dbTab = APM.dbTab === 'clusters' ? 'slow' : APM.dbTab;
+    }
+    delete APM.pageParams.clusterId;
+  }
   const tab = APM.dbTab;
   const totalQps = APM.dbClusters.reduce((a,b)=>a+b.qps, 0);
   const slowCnt = APM.slowQueries.filter(q=>q.p99>500).length;
@@ -765,6 +773,14 @@ APM.openRedisClusterDetail = function(id) {
 };
 
 APM.renderRedis = function() {
+  // One-shot route param: ?clusterId=... auto-applies the cluster filter.
+  if (APM.pageParams && APM.pageParams.clusterId) {
+    if (APM.redisClusters.find(c => c.id === APM.pageParams.clusterId)) {
+      APM.redisClusterFilter = APM.pageParams.clusterId;
+      APM.redisTab = APM.redisTab === 'clusters' ? 'commands' : APM.redisTab;
+    }
+    delete APM.pageParams.clusterId;
+  }
   const tab = APM.redisTab;
   const totalQps = APM.redisClusters.reduce((a,b)=>a+b.qps, 0);
   const avgHit = (APM.redisClusters.reduce((a,b)=>a+b.hitPct, 0) / APM.redisClusters.length).toFixed(1);
